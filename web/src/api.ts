@@ -74,10 +74,11 @@ export interface SignedFields {
 }
 
 /**
- * Leaderboard sort modes. `recent`/`volume` are v1 (claim recency / deed-sale
- * volume); `trading` is v2 — ranking by per-word token trading volume.
+ * Leaderboard / discovery sort modes. `recent`/`volume` are v1 (claim recency /
+ * deed-sale volume); `trading` is v2 — ranking by per-word token trading volume;
+ * `graduating` surfaces not-yet-graduated markets closest to graduation first.
  */
-export type WordSort = "recent" | "volume" | "trading";
+export type WordSort = "recent" | "volume" | "trading" | "graduating";
 
 export const api = {
   /** GET /check/:word -> availability for the taken-state. */

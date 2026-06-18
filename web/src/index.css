@@ -89,3 +89,82 @@ body {
     animation: none;
   }
 }
+
+/*
+  Live-feed motion. New rows slide in from the top and a brief highlight sweep
+  fades out, giving the "streaming in" launchpad feel without a JS animation lib.
+  All of it is gated behind prefers-reduced-motion so it stays accessible.
+*/
+@keyframes row-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes row-flash {
+  0% {
+    background-color: rgb(var(--c-accent) / 0.08);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.row-enter {
+  animation:
+    row-enter 0.28s ease-out,
+    row-flash 1.6s ease-out;
+}
+
+/* Pulsing "● LIVE" dot. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+/* Thin shimmer over the graduation progress bar for a touch of FOMO energy. */
+@keyframes grad-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+.grad-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.35),
+    transparent
+  );
+  width: 40%;
+  animation: grad-sheen 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-enter,
+  .live-dot,
+  .grad-sheen::after {
+    animation: none;
+  }
+  .grad-sheen::after {
+    display: none;
+  }
+}

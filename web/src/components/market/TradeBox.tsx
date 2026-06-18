@@ -27,52 +27,73 @@ function applySlippage(quote: bigint, bps: number): bigint {
 
 /**
  * Buy/Sell box — the centerpiece of the coin page. Lives *inside* a WhitelistGate
- * (rendered by the parent) so it only appears for wallets cleared to trade. When
- * the market has graduated, trading is frozen on-chain, so the parent renders a
- * graduated notice instead of this box.
+ * (rendered by the parent) so it only appears for wallets cleared to trade. After
+ * graduation the contract freezes buys but keeps sell() open, so `buyFrozen`
+ * disables only the Buy tab (and defaults the active tab to Sell) instead of
+ * hiding the whole box.
  */
 export function TradeBox({
   market,
   symbol,
   word,
+  buyFrozen = false,
   onTraded,
 }: {
   market: Address;
   symbol?: string | null;
   word: string;
+  /** Graduated markets freeze buys; selling stays available. */
+  buyFrozen?: boolean;
   /** Called after a confirmed trade so the parent can refetch its own reads. */
   onTraded: () => void;
 }) {
   const { address } = useAccount();
-  const [tab, setTab] = useState<Tab>("buy");
+  const [tab, setTab] = useState<Tab>(buyFrozen ? "sell" : "buy");
   const [slippageBps, setSlippageBps] = useState<number>(DEFAULT_SLIPPAGE_BPS);
+
+  // If the market graduates while open on the Buy tab, push the user to Sell.
+  useEffect(() => {
+    if (buyFrozen && tab === "buy") setTab("sell");
+  }, [buyFrozen, tab]);
 
   return (
     <Card className="p-4">
       <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-surface-2 p-1" role="tablist" aria-label="Trade">
-        {(["buy", "sell"] as const).map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${
-              tab === t ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {(["buy", "sell"] as const).map((t) => {
+          const disabled = buyFrozen && t === "buy";
+          return (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              disabled={disabled}
+              onClick={() => !disabled && setTab(t)}
+              title={disabled ? "Buys are frozen — this market has graduated" : undefined}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                tab === t ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg"
+              }`}
+            >
+              {t}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "buy" ? (
-        <BuyPanel
-          market={market}
-          symbol={symbol}
-          word={word}
-          slippageBps={slippageBps}
-          onTraded={onTraded}
-        />
+        buyFrozen ? (
+          <div className="rounded-lg bg-surface-2 p-5 text-center text-sm text-muted">
+            This market has <span className="font-medium text-fg">graduated 🎓</span>. Buys are
+            frozen — you can still sell your {symbol ? `$${symbol}` : "tokens"}.
+          </div>
+        ) : (
+          <BuyPanel
+            market={market}
+            symbol={symbol}
+            word={word}
+            slippageBps={slippageBps}
+            onTraded={onTraded}
+          />
+        )
       ) : (
         <SellPanel
           market={market}

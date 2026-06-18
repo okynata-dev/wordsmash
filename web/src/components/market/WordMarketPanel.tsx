@@ -58,6 +58,13 @@ export function WordMarketPanel({
   const deedOwner = reads.deedOwner ?? null;
   const deedFeesWei = reads.deedFeesWei ?? (info ? BigInt(info.deedFeesWei) : 0n);
 
+  // Graduation progress (the FOMO centerpiece). Indexed-only fields — guard for
+  // older API snapshots that may omit them.
+  const progressBps = info?.graduationProgressBps;
+  const progressPct =
+    typeof progressBps === "number" ? Math.max(0, Math.min(100, progressBps / 100)) : null;
+  const traders = info?.traders;
+
   const isDeedOwner =
     Boolean(address) && Boolean(deedOwner) && normAddr(address) === normAddr(deedOwner);
 
@@ -76,7 +83,12 @@ export function WordMarketPanel({
             <div className="flex items-center gap-2 text-xs text-muted">
               <span>Price</span>
               {symbol && <Pill>{symbol}</Pill>}
-              {graduated && <Pill tone="warning">graduated</Pill>}
+              {graduated && <Pill tone="warning">graduated 🎓</Pill>}
+              {typeof traders === "number" && (
+                <span className="tabular-nums text-faint">
+                  {traders.toLocaleString()} {traders === 1 ? "trader" : "traders"}
+                </span>
+              )}
             </div>
             <div className="mt-1 text-3xl font-semibold tabular-nums sm:text-4xl">
               {priceWei !== undefined ? ethLabel(priceWei) : <Skeleton className="h-9 w-40" />}
@@ -93,6 +105,14 @@ export function WordMarketPanel({
             />
           </div>
         </div>
+
+        {/* Graduation progress — the FOMO bar. */}
+        <GraduationBar
+          pct={progressPct}
+          graduated={graduated}
+          realEthReserveWei={info.realEthReserveWei}
+          graduationThresholdWei={info.graduationThresholdWei}
+        />
       </Card>
 
       {/* Price chart */}
@@ -102,20 +122,22 @@ export function WordMarketPanel({
         <PriceChart points={chart.data ?? []} />
       )}
 
-      {/* Buy / Sell box */}
-      {graduated ? (
-        <Card className="p-5 text-center text-sm text-muted">
-          This market has <span className="font-medium text-fg">graduated</span> — bonding-curve
-          trading is frozen.
-        </Card>
-      ) : !isConnected || wrongNetwork ? (
+      {/* Buy / Sell box. After graduation the contract freezes buys but keeps
+          sell() open, so we keep the Sell tab usable and only freeze Buy. */}
+      {!isConnected || wrongNetwork ? (
         <Card className="flex flex-col items-center gap-3 p-5 text-sm text-muted">
           <span>Connect your wallet to trade {symbol ? `$${symbol}` : "this coin"}.</span>
           <WalletButton />
         </Card>
       ) : (
         <WhitelistGate>
-          <TradeBox market={marketAddr} symbol={symbol} word={word} onTraded={onChanged} />
+          <TradeBox
+            market={marketAddr}
+            symbol={symbol}
+            word={word}
+            buyFrozen={graduated}
+            onTraded={onChanged}
+          />
         </WhitelistGate>
       )}
 
@@ -143,6 +165,61 @@ export function WordMarketPanel({
       {/* Recent trades */}
       <RecentTrades word={word} symbol={symbol} />
     </section>
+  );
+}
+
+/**
+ * The graduation FOMO bar: "73% to graduation · 7.3 / 10 ETH". When graduated,
+ * shows a full, celebratory state. Degrades to nothing if the API snapshot is
+ * too old to carry progress fields.
+ */
+function GraduationBar({
+  pct,
+  graduated,
+  realEthReserveWei,
+  graduationThresholdWei,
+}: {
+  pct: number | null;
+  graduated: boolean;
+  realEthReserveWei: string;
+  graduationThresholdWei: string;
+}) {
+  if (pct === null && !graduated) return null;
+  const shown = graduated ? 100 : (pct ?? 0);
+
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <div className="mb-1.5 flex items-center justify-between text-xs">
+        <span className="font-medium text-fg">
+          {graduated ? "🎓 Graduated" : `${shown.toFixed(0)}% to graduation`}
+        </span>
+        <span className="tabular-nums text-muted">
+          {ethLabel(realEthReserveWei)} / {ethLabel(graduationThresholdWei)}
+        </span>
+      </div>
+      <div
+        className={`relative h-2.5 w-full overflow-hidden rounded-full bg-surface-2 ${
+          graduated ? "" : "grad-sheen"
+        }`}
+        role="progressbar"
+        aria-valuenow={Math.round(shown)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Graduation progress"
+      >
+        <div
+          className={`h-full rounded-full transition-[width] duration-500 ${
+            graduated ? "bg-warning" : "bg-positive"
+          }`}
+          style={{ width: `${shown}%` }}
+        />
+      </div>
+      {!graduated && (
+        <p className="mt-1.5 text-xs text-faint">
+          When the curve fills, buys freeze and the token graduates. Selling stays open.
+        </p>
+      )}
+    </div>
   );
 }
 

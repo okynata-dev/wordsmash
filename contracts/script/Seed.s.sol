@@ -42,24 +42,31 @@ contract Seed is Script {
         market.list(forSale, 0.05 ether);
         vm.stopBroadcast();
 
-        // Account 1: enroll, buy the listed deed (a Sale), and TRADE the "genesis" token market
-        // (generates Trade events, price movement, volume, and deed-owner fees for ACC0).
+        // Account 1: enroll, buy the listed deed (a Sale), TRADE "genesis", and CLAIM two more
+        // words + trade them — so the discovery boards (New / Trending / About-to-graduate) and the
+        // live feed have several coins with real activity.
         WordMarket genesisMarket = WordMarket(payable(registry.marketOf("genesis")));
         vm.startBroadcast(PK1);
         registry.verifyWhitelist(proof1);
         market.buy{value: 0.05 ether}(forSale);
-        genesisMarket.buy{value: 0.5 ether}(0); // buy genesis tokens
+        genesisMarket.buy{value: 0.5 ether}(0);
         uint256 half = genesisMarket.balanceOf(ACC1) / 2;
-        genesisMarket.sell(half, 0); // sell half back -> more trades + fees
+        genesisMarket.sell(half, 0);
+
+        (, address solMkt) = registry.claim{value: fee}("solana");
+        (, address degenMkt) = registry.claim{value: fee}("degen");
+        WordMarket(payable(solMkt)).buy{value: 2 ether}(0); // pushes ~20% toward graduation
+        WordMarket(payable(degenMkt)).buy{value: 0.3 ether}(0);
         vm.stopBroadcast();
 
-        // Account 0 also buys a bit of its own token (more activity).
+        // Account 0 also buys a bit of its own token (more activity + price movement).
         vm.startBroadcast(PK0);
         genesisMarket.buy{value: 0.2 ether}(0);
+        WordMarket(payable(degenMkt)).buy{value: 0.1 ether}(0);
         vm.stopBroadcast();
 
-        console2.log("Seeded: 3 words claimed by", ACC0);
-        console2.log("Deed sale: 'base' bought by", ACC1);
-        console2.log("Token trades on $GENESIS market:", address(genesisMarket));
+        console2.log("Seeded: 5 words, token markets, trades, a deed sale.");
+        console2.log("$GENESIS market:", address(genesisMarket));
+        console2.log("$SOLANA market (graduating):", solMkt);
     }
 }

@@ -69,8 +69,12 @@ CREATE TABLE IF NOT EXISTS markets (
   token_symbol   TEXT,
   volume_wei     TEXT DEFAULT '0',
   last_price_wei TEXT DEFAULT '0',
+  -- approx curve ETH reserve, maintained from Trade events (powers the "about to graduate"
+  -- ranking; the coin page uses the exact live on-chain value). buy:+ethIn, sell:-grossEthOut.
+  real_eth_reserve TEXT DEFAULT '0',
   graduated      INTEGER DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS idx_markets_reserve ON markets(real_eth_reserve);
 
 CREATE TABLE IF NOT EXISTS activity (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

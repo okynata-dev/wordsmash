@@ -196,11 +196,15 @@ describe("GET /word/:word includes market info", () => {
       marketCapWei: "1234",
       deedFeesWei: "555",
       tokenSupply: "1000000",
+      realEthReserveWei: "5000000000000000000", // 5 ETH
+      graduationThresholdWei: "10000000000000000000", // 10 ETH -> 50%
     });
 
     const d = await getWordDetail(db, "BREAD", reader);
     expect(d.market).not.toBeNull();
     expect(d.market?.priceWei).toBe("11"); // last_price from D1
+    expect(d.market?.graduationProgressBps).toBe(5000); // 5/10 ETH
+    expect(d.market?.traders).toBeGreaterThanOrEqual(1);
     expect(d.market?.volumeWei).toBe(BIG_A.toString()); // from D1
     expect(d.market?.graduated).toBe(true); // from D1
     expect(d.market?.tokenSymbol).toBe("BREAD"); // from D1

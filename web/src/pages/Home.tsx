@@ -12,9 +12,11 @@ import { registryAddress, wordRegistryAbi } from "../contracts";
 import { Button, Card, Spinner, Pill } from "../components/ui";
 import { WhitelistGate } from "../components/WhitelistGate";
 import { WalletButton } from "../components/WalletButton";
-import { ActivityFeed } from "../components/ActivityFeed";
+import { ActivityFeed, LiveBadge } from "../components/ActivityFeed";
+import { DiscoveryBoard } from "../components/DiscoveryBoard";
 import { useToast } from "../components/Toast";
-import { friendlyError, ethLabel } from "../lib/format";
+import { friendlyError, ethLabel, formatEthAmount } from "../lib/format";
+import { useCountUp } from "../hooks/useCountUp";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
 import {
   useClaimFee,
@@ -43,6 +45,7 @@ export function Home() {
     queryKey: ["stats"],
     queryFn: api.stats,
     retry: 1,
+    refetchInterval: 10_000,
   });
   const { data: claimFee } = useClaimFee();
   const { data: maxClaims } = useMaxClaims();
@@ -214,8 +217,8 @@ export function Home() {
         </p>
       )}
 
-      {/* Live counters */}
-      <div className="mt-12 grid grid-cols-2 gap-3 sm:gap-4">
+      {/* Live counters — animate up as /stats refetches. */}
+      <div className="mt-12 grid grid-cols-3 gap-3 sm:gap-4">
         <Stat
           label="Words claimed"
           value={stats?.wordsClaimed}
@@ -228,17 +231,36 @@ export function Home() {
           error={statsError}
           onRetry={() => void refetchStats()}
         />
+        <Stat
+          label="Total volume"
+          ethWei={stats?.totalVolumeWei}
+          error={statsError}
+          onRetry={() => void refetchStats()}
+        />
       </div>
 
-      {/* Live activity */}
+      {/* Live activity ticker */}
       <section className="mt-12">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted">Live</h2>
+          <h2 className="flex items-center gap-2 text-sm font-medium text-muted">
+            Live <LiveBadge />
+          </h2>
           <Link to="/activity" className="text-xs text-muted hover:text-fg">
             View all →
           </Link>
         </div>
-        <ActivityFeed limit={6} compact />
+        <ActivityFeed limit={6} compact live />
+      </section>
+
+      {/* Discovery board — what's hot right now. */}
+      <section className="mt-12">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted">Discover</h2>
+          <Link to="/top" className="text-xs text-muted hover:text-fg">
+            Leaderboard →
+          </Link>
+        </div>
+        <DiscoveryBoard />
       </section>
     </div>
   );
@@ -266,14 +288,38 @@ function StatusLine({ state }: { state: State }) {
 function Stat({
   label,
   value,
+  ethWei,
   error,
   onRetry,
 }: {
   label: string;
   value?: number;
+  /**
+   * When set, render an ETH amount: count-up the numeric portion for the live
+   * feel, but snap to the exact ethLabel string (correct wei trimming) once the
+   * animation settles, so we never show a lossy float as the resting value.
+   */
+  ethWei?: string;
   error?: boolean;
   onRetry?: () => void;
 }) {
+  // For ETH stats, derive a numeric target from the trimmed label so the count-up
+  // tracks the value the user will actually see (no Number(BigInt) on raw wei).
+  const ethTarget =
+    ethWei !== undefined ? Number(formatEthAmount(ethWei).replace(/,/g, "")) : undefined;
+  const animated = useCountUp(ethWei !== undefined ? ethTarget : value);
+
+  let display: string;
+  if (error) {
+    display = "";
+  } else if (ethWei !== undefined) {
+    display = ethTarget === undefined ? "—" : `${(animated ?? ethTarget).toFixed(ethTarget >= 1 ? 2 : 4)} ETH`;
+  } else if (value === undefined || animated === null) {
+    display = "—";
+  } else {
+    display = Math.round(animated).toLocaleString();
+  }
+
   return (
     <Card className="p-5 text-center">
       <div className="text-2xl font-semibold tabular-nums">
@@ -281,10 +327,8 @@ function Stat({
           <button onClick={onRetry} className="text-base font-normal text-muted underline">
             retry
           </button>
-        ) : value === undefined ? (
-          "—"
         ) : (
-          value.toLocaleString()
+          display
         )}
       </div>
       <div className="mt-1 text-xs text-muted">{label}</div>

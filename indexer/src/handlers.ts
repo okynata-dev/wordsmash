@@ -209,21 +209,30 @@ export async function handleTrade(
       )
       .run();
 
-    // volume += ethAmount (BigInt, TEXT); last_price_wei = newPrice.
+    // volume += ethAmount; last_price_wei = newPrice; approx real_eth_reserve from the trade.
+    // FEE_BPS matches the deployed curve config (1%). buy ethWei = msg.value -> ethIn = *(1-fee);
+    // sell ethWei = ethToSeller -> grossEthOut = /(1-fee). Approximate (rounding) but fine for
+    // ranking; the coin page reads the exact reserve on-chain.
+    const FEE_BPS = 100n;
     const cur = await db
-      .prepare("SELECT volume_wei FROM markets WHERE market = ?")
+      .prepare("SELECT volume_wei, real_eth_reserve FROM markets WHERE market = ?")
       .bind(market)
-      .first<{ volume_wei: string | null }>();
+      .first<{ volume_wei: string | null; real_eth_reserve: string | null }>();
     const newVol = (BigInt(cur?.volume_wei ?? "0") + ev.ethWei).toString();
+    let reserve = BigInt(cur?.real_eth_reserve ?? "0");
+    if (ev.isBuy) reserve += (ev.ethWei * (10000n - FEE_BPS)) / 10000n;
+    else reserve -= (ev.ethWei * 10000n) / (10000n - FEE_BPS);
+    if (reserve < 0n) reserve = 0n;
     await db
       .prepare(
-        `INSERT INTO markets (market, token_id, word, volume_wei, last_price_wei, graduated)
-         VALUES (?, ?, ?, ?, ?, 0)
+        `INSERT INTO markets (market, token_id, word, volume_wei, last_price_wei, real_eth_reserve, graduated)
+         VALUES (?, ?, ?, ?, ?, ?, 0)
          ON CONFLICT(market) DO UPDATE SET
            volume_wei = excluded.volume_wei,
-           last_price_wei = excluded.last_price_wei`,
+           last_price_wei = excluded.last_price_wei,
+           real_eth_reserve = excluded.real_eth_reserve`,
       )
-      .bind(market, tokenId, word, newVol, ev.priceWei.toString())
+      .bind(market, tokenId, word, newVol, ev.priceWei.toString(), reserve.toString())
       .run();
   }
 

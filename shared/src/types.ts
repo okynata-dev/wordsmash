@@ -6,6 +6,11 @@ export interface WordRow {
   owner: string; // checksummed address
   claimedAt: number; // unix seconds
   tx: string; // claim tx hash
+  // Optional token-market fields (present on /words rows once a word has a market):
+  priceWei?: string; // spot price, wei/token
+  tradeVolumeWei?: string; // token bonding-curve volume
+  graduated?: boolean;
+  graduationProgressBps?: number; // 0..10000 toward graduation
 }
 
 export interface ListingRow {
@@ -47,6 +52,11 @@ export interface MarketInfo {
   deedFeesWei: string; // unclaimed deed-owner fees (claimable by the deed holder)
   tokenSupply: string;
   tokenSymbol: string;
+  // graduation progress (the FOMO bar): real ETH in the curve vs the threshold that freezes buys.
+  realEthReserveWei: string;
+  graduationThresholdWei: string;
+  graduationProgressBps: number; // 0..10000 (clamped)
+  traders: number; // distinct trader count (manipulation-resistant proxy for holders)
 }
 
 export interface TradeRow {

@@ -112,6 +112,8 @@ export interface MarketChainReads {
   marketCapWei: string;
   deedFeesWei: string;
   tokenSupply: string;
+  realEthReserveWei: string;
+  graduationThresholdWei: string;
 }
 export type MarketReader = (market: string) => Promise<MarketChainReads | null>;
 
@@ -119,15 +121,20 @@ export function chainMarketReader(rpcUrl: string): MarketReader {
   const client = createPublicClient({ transport: http(rpcUrl) });
   return async (market: string) => {
     try {
-      const [cap, fees, supply] = await Promise.all([
-        client.readContract({ address: market as `0x${string}`, abi: wordMarketAbi, functionName: "marketCapWei" }),
-        client.readContract({ address: market as `0x${string}`, abi: wordMarketAbi, functionName: "deedFeesAccrued" }),
-        client.readContract({ address: market as `0x${string}`, abi: wordMarketAbi, functionName: "totalSupply" }),
+      const m = { address: market as `0x${string}`, abi: wordMarketAbi } as const;
+      const [cap, fees, supply, reserve, threshold] = await Promise.all([
+        client.readContract({ ...m, functionName: "marketCapWei" }),
+        client.readContract({ ...m, functionName: "deedFeesAccrued" }),
+        client.readContract({ ...m, functionName: "totalSupply" }),
+        client.readContract({ ...m, functionName: "realEthReserve" }),
+        client.readContract({ ...m, functionName: "graduationThreshold" }),
       ]);
       return {
         marketCapWei: (cap as bigint).toString(),
         deedFeesWei: (fees as bigint).toString(),
         tokenSupply: (supply as bigint).toString(),
+        realEthReserveWei: (reserve as bigint).toString(),
+        graduationThresholdWei: (threshold as bigint).toString(),
       };
     } catch {
       return null;
@@ -135,42 +142,52 @@ export function chainMarketReader(rpcUrl: string): MarketReader {
   };
 }
 
-// GET /words?sort=recent|volume|trading&cursor=
-//   - sort=volume  ranks by DEED secondary-sale volume (words.volume_wei)
-//   - sort=trading ranks by TOKEN bonding-curve volume (markets.volume_wei)
-// These are deliberately distinct metrics.
+/** Graduation progress in basis points (0..10000), clamped. */
+export function progressBps(reserveWei: string, thresholdWei: string): number {
+  try {
+    const r = BigInt(reserveWei);
+    const t = BigInt(thresholdWei);
+    if (t <= 0n) return 0;
+    const bps = Number((r * 10000n) / t);
+    return Math.max(0, Math.min(10000, bps));
+  } catch {
+    return 0;
+  }
+}
+
+// 10 ETH — matches the deployed curve config. TODO(operator): keep in sync if you change it.
+const GRAD_THRESHOLD_WEI = "10000000000000000000";
+
+// GET /words?sort=recent|volume|trading|graduating&cursor=
+//   - sort=volume     ranks by DEED secondary-sale volume (words.volume_wei)
+//   - sort=trading    ranks by TOKEN bonding-curve volume (markets.volume_wei)
+//   - sort=graduating not-yet-graduated first, then closest to graduation (markets.real_eth_reserve)
+// Every row also carries optional token-market fields (price, trade volume, graduation progress)
+// so tiles can render a price + progress bar without an extra fetch.
 export async function getWords(
   db: Db,
   sort: string,
   cursor: string | null,
 ): Promise<Paginated<WordRow>> {
   const offset = cursor ? Math.min(Math.max(0, parseInt(cursor, 10) || 0), MAX_OFFSET) : 0;
-  let sql: string;
+  let orderBy: string;
   if (sort === "trading") {
-    // Rank by token-market trading volume. Left-join markets; words without a
-    // market sort last (coalesced to 0).
-    sql = `
-      SELECT w.token_id AS token_id, w.word AS word, w.owner AS owner, w.claimed_at AS claimed_at, w.tx AS tx
-      FROM words w
-      LEFT JOIN markets m ON m.market = w.market
-      ORDER BY CAST(COALESCE(m.volume_wei, '0') AS REAL) DESC, w.claimed_at DESC
-      LIMIT ? OFFSET ?`;
+    orderBy = "CAST(COALESCE(m.volume_wei,'0') AS REAL) DESC, w.claimed_at DESC";
+  } else if (sort === "graduating") {
+    orderBy =
+      "COALESCE(m.graduated,0) ASC, CAST(COALESCE(m.real_eth_reserve,'0') AS REAL) DESC, w.claimed_at DESC";
   } else if (sort === "volume") {
-    // H4: order by the maintained per-token `volume_wei` column (indexed) instead of a
-    // correlated subquery over `sales`. CAST(... AS REAL) keeps the magnitude ordering
-    // (exact ties broken by claimed_at) while staying within a double.
-    sql = `
-      SELECT token_id, word, owner, claimed_at, tx
-      FROM words
-      ORDER BY CAST(volume_wei AS REAL) DESC, claimed_at DESC
-      LIMIT ? OFFSET ?`;
+    orderBy = "CAST(w.volume_wei AS REAL) DESC, w.claimed_at DESC";
   } else {
-    sql = `
-      SELECT token_id, word, owner, claimed_at, tx
-      FROM words
-      ORDER BY claimed_at DESC, token_id DESC
-      LIMIT ? OFFSET ?`;
+    orderBy = "w.claimed_at DESC, w.token_id DESC";
   }
+  const sql = `
+    SELECT w.token_id AS token_id, w.word AS word, w.owner AS owner, w.claimed_at AS claimed_at, w.tx AS tx,
+           m.last_price_wei AS price_wei, m.volume_wei AS m_volume, m.real_eth_reserve AS reserve, m.graduated AS m_grad
+    FROM words w
+    LEFT JOIN markets m ON m.market = w.market
+    ORDER BY ${orderBy}
+    LIMIT ? OFFSET ?`;
   const { results } = await db
     .prepare(sql)
     .bind(PAGE_SIZE + 1, offset)
@@ -180,12 +197,23 @@ export async function getWords(
       owner: string;
       claimed_at: number;
       tx: string;
+      price_wei: string | null;
+      m_volume: string | null;
+      reserve: string | null;
+      m_grad: number | null;
     }>();
 
   const hasMore = results.length > PAGE_SIZE;
   const page = results.slice(0, PAGE_SIZE);
   return {
-    items: page.map(toWordRow),
+    items: page.map((r) => ({
+      ...toWordRow(r),
+      // optional token-market fields (absent => no market yet)
+      priceWei: r.price_wei ?? undefined,
+      tradeVolumeWei: r.m_volume ?? undefined,
+      graduated: r.m_grad != null ? !!r.m_grad : undefined,
+      graduationProgressBps: r.reserve != null ? progressBps(r.reserve, GRAD_THRESHOLD_WEI) : undefined,
+    })),
     cursor: hasMore ? String(offset + PAGE_SIZE) : null,
   };
 }
@@ -257,6 +285,12 @@ export async function getWordDetail(
       }>();
     if (m) {
       const live = reader ? await reader(m.market) : null;
+      const traders = await db
+        .prepare("SELECT COUNT(DISTINCT trader) AS c FROM trades WHERE market = ?")
+        .bind(m.market)
+        .first<{ c: number }>();
+      const reserve = live?.realEthReserveWei ?? "0";
+      const threshold = live?.graduationThresholdWei ?? "0";
       market = {
         market: checksum(m.market),
         priceWei: m.last_price_wei ?? "0",
@@ -266,6 +300,10 @@ export async function getWordDetail(
         deedFeesWei: live?.deedFeesWei ?? "0",
         tokenSupply: live?.tokenSupply ?? "0",
         tokenSymbol: m.token_symbol ?? "",
+        realEthReserveWei: reserve,
+        graduationThresholdWei: threshold,
+        graduationProgressBps: progressBps(reserve, threshold),
+        traders: Number(traders?.c ?? 0),
       };
     }
   }
