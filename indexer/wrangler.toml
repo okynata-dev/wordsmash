@@ -19,8 +19,8 @@ database_id = "TODO_OPERATOR_D1_DATABASE_ID" # TODO(operator): real D1 id
 # Defaults below are the LOCAL anvil deployment (deterministic addresses from a fresh
 # `make deploy`). TODO(operator): override REGISTRY/MARKETPLACE/RPC_URL/START_BLOCK for Base Sepolia.
 RPC_URL = "http://127.0.0.1:8545"            # TODO(operator): chain RPC URL
-REGISTRY = "0x5FbDB2315678afecb367f032d93F642f64180aa3"     # local anvil default; TODO(operator) for testnet
-MARKETPLACE = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"  # local anvil default; TODO(operator) for testnet
+REGISTRY = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"     # local anvil default; TODO(operator) for testnet
+MARKETPLACE = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"  # local anvil default; TODO(operator) for testnet
 START_BLOCK = "0"                            # TODO(operator): deployment block
 WEB_APP_BASE = "http://localhost:5173"       # TODO(operator): web app base url for /share redirects
 # C1: bearer token guarding POST /admin/*. TODO(operator): replace with a strong secret

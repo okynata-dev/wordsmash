@@ -7,5 +7,6 @@ OUT=../shared/src/abis.ts
   echo "// Auto-generated from Foundry artifacts. Regenerate with contracts/tools/gen-abis.sh."
   echo "export const wordRegistryAbi = $(jq -c '.abi' out/WordRegistry.sol/WordRegistry.json) as const;"
   echo "export const deedMarketplaceAbi = $(jq -c '.abi' out/DeedMarketplace.sol/DeedMarketplace.json) as const;"
+  echo "export const wordMarketAbi = $(jq -c '.abi' out/WordMarket.sol/WordMarket.json) as const;"
 } > "$OUT"
 echo "Wrote $OUT"

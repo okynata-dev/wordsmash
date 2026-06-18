@@ -15,6 +15,8 @@ import type {
   Paginated,
   SearchResult,
   ActivityRow,
+  TradeRow,
+  PricePoint,
 } from "@shared/types";
 import type { Comment } from "@shared/social";
 
@@ -71,6 +73,12 @@ export interface SignedFields {
   signature: `0x${string}`;
 }
 
+/**
+ * Leaderboard sort modes. `recent`/`volume` are v1 (claim recency / deed-sale
+ * volume); `trading` is v2 — ranking by per-word token trading volume.
+ */
+export type WordSort = "recent" | "volume" | "trading";
+
 export const api = {
   /** GET /check/:word -> availability for the taken-state. */
   check: (word: string) => get<CheckResult>(`/check/${encodeURIComponent(word)}`),
@@ -78,14 +86,23 @@ export const api = {
   /** GET /stats -> global counters. */
   stats: () => get<Stats>(`/stats`),
 
-  /** GET /word/:word -> detail incl. ownership history + listing. */
+  /** GET /word/:word -> detail incl. ownership history + listing + token market. */
   word: (word: string) => get<WordDetail>(`/word/${encodeURIComponent(word)}`),
+
+  /** GET /word/:word/trades?cursor= -> a page of token-market trades (newest first). */
+  trades: (word: string, cursor?: string) => {
+    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    return get<Paginated<TradeRow>>(`/word/${encodeURIComponent(word)}/trades${qs}`);
+  },
+
+  /** GET /word/:word/chart -> price history points for the inline chart. */
+  chart: (word: string) => getList<PricePoint>(`/word/${encodeURIComponent(word)}/chart`),
 
   /** GET /profile/:address -> meta + owned words, listings, activity, stats. */
   profile: (address: string) => get<Profile>(`/profile/${normAddr(address)}`),
 
   /** GET /words?sort=... -> a single page of words. Returns the paginated envelope. */
-  wordsPage: (sort?: "recent" | "volume", cursor?: string) => {
+  wordsPage: (sort?: WordSort, cursor?: string) => {
     const params = new URLSearchParams();
     if (sort) params.set("sort", sort);
     if (cursor) params.set("cursor", cursor);
@@ -98,7 +115,7 @@ export const api = {
    * Returns the rows plus whether more pages remained (so callers can label a cap).
    */
   words: async (
-    sort?: "recent" | "volume",
+    sort?: WordSort,
     maxPages = 5,
   ): Promise<{ items: WordRow[]; truncated: boolean }> => {
     const items: WordRow[] = [];

@@ -25,7 +25,7 @@ export interface SaleRow {
   ts: number;
 }
 
-export type ActivityType = "claim" | "list" | "cancel" | "sale" | "transfer";
+export type ActivityType = "claim" | "list" | "cancel" | "sale" | "transfer" | "buy" | "sell";
 
 export interface ActivityRow {
   address: string;
@@ -38,6 +38,34 @@ export interface ActivityRow {
   tx: string;
 }
 
+export interface MarketInfo {
+  market: string; // the WordMarket clone address
+  priceWei: string; // spot price, wei per token (scaled 1e18)
+  marketCapWei: string; // circulating * price
+  volumeWei: string; // cumulative trade volume (ETH side)
+  graduated: boolean;
+  deedFeesWei: string; // unclaimed deed-owner fees (claimable by the deed holder)
+  tokenSupply: string;
+  tokenSymbol: string;
+}
+
+export interface TradeRow {
+  market: string;
+  word: string;
+  trader: string;
+  isBuy: boolean;
+  ethWei: string;
+  tokenAmount: string;
+  priceWei: string;
+  ts: number;
+  tx: string;
+}
+
+export interface PricePoint {
+  ts: number;
+  priceWei: string;
+}
+
 export interface WordDetail {
   word: string;
   tokenId: string;
@@ -45,6 +73,7 @@ export interface WordDetail {
   claimedAt: number | null;
   history: SaleRow[];
   listing: ListingRow | null;
+  market: MarketInfo | null; // the bonding-curve token market (v2)
 }
 
 // Off-chain profile metadata lives in social.ts; re-exported on Profile for one fetch.

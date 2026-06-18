@@ -19,6 +19,8 @@ import {
   handleListed,
   handleCancelled,
   handleSale,
+  handleTrade,
+  handleGraduated,
   type EventContext,
 } from "./handlers.js";
 
@@ -37,8 +39,14 @@ export interface Env {
 
 // Event signatures (viem parseAbiItem).
 const wordClaimedEvent = parseAbiItem(
-  "event WordClaimed(string word, uint256 indexed tokenId, address indexed owner)",
+  "event WordClaimed(string word, uint256 indexed tokenId, address indexed owner, address market)",
 );
+// v2 token-market events. Emitted by MANY clone addresses (one per word), so we
+// fetch them with NO address filter and keep only logs from known markets.
+const tradeEvent = parseAbiItem(
+  "event Trade(address indexed trader, bool isBuy, uint256 ethAmount, uint256 tokenAmount, uint256 newPrice)",
+);
+const graduatedEvent = parseAbiItem("event Graduated(uint256 realEthReserve)");
 const transferEvent = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 );
@@ -140,22 +148,45 @@ export async function indexRange(
   const registry = env.REGISTRY as `0x${string}`;
   const marketplace = env.MARKETPLACE as `0x${string}`;
 
-  const [claimed, transfers, listed, cancelled, sales] = await Promise.all([
+  const [claimed, transfers, listed, cancelled, sales, trades, graduated] = await Promise.all([
     client.getLogs({ address: registry, event: wordClaimedEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
     client.getLogs({ address: registry, event: transferEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
     client.getLogs({ address: marketplace, event: listedEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
     client.getLogs({ address: marketplace, event: cancelledEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
     client.getLogs({ address: marketplace, event: saleEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
+    // v2: no address filter — getLogs returns Trade/Graduated logs from every
+    // contract in range; we filter to known market addresses below.
+    client.getLogs({ event: tradeEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
+    client.getLogs({ event: graduatedEvent, fromBlock: BigInt(from), toBlock: BigInt(to) }),
   ]);
 
+  // Build the set of known market addresses: those already in D1 plus any
+  // deployed by WordClaimed logs in THIS range (so a claim and its first trade
+  // can land in the same range). The claim handler also seeds the markets row,
+  // but trades may be ordered after the claim within the range, so we union both.
+  const knownMarkets = new Set<string>();
+  const { results: marketRows } = await db
+    .prepare("SELECT market FROM markets")
+    .all<{ market: string }>();
+  for (const r of marketRows) if (r.market) knownMarkets.add(r.market.toLowerCase());
+  for (const l of claimed) {
+    const mkt = (l as AnyLog).args?.market;
+    if (typeof mkt === "string") knownMarkets.add(mkt.toLowerCase());
+  }
+
+  const isKnownMarket = (l: AnyLog): boolean =>
+    knownMarkets.has(String(l.address ?? "").toLowerCase());
+
   // Merge and order by (blockNumber, logIndex) so handlers see a consistent
-  // sequence (claim/mint before transfers/sales).
+  // sequence (claim/mint before transfers/sales/trades).
   const all: Array<{ kind: string; log: AnyLog }> = [
     ...claimed.map((l) => ({ kind: "claim", log: l as AnyLog })),
     ...transfers.map((l) => ({ kind: "transfer", log: l as AnyLog })),
     ...listed.map((l) => ({ kind: "listed", log: l as AnyLog })),
     ...cancelled.map((l) => ({ kind: "cancelled", log: l as AnyLog })),
     ...sales.map((l) => ({ kind: "sale", log: l as AnyLog })),
+    ...trades.filter((l) => isKnownMarket(l as AnyLog)).map((l) => ({ kind: "trade", log: l as AnyLog })),
+    ...graduated.filter((l) => isKnownMarket(l as AnyLog)).map((l) => ({ kind: "graduated", log: l as AnyLog })),
   ];
 
   all.sort((a, b) => {
@@ -176,7 +207,12 @@ export async function indexRange(
       case "claim":
         await handleWordClaimed(
           db,
-          { word: String(args.word), tokenId: args.tokenId as bigint, owner: String(args.owner) },
+          {
+            word: String(args.word),
+            tokenId: args.tokenId as bigint,
+            owner: String(args.owner),
+            market: args.market != null ? String(args.market) : undefined,
+          },
           ctx,
         );
         break;
@@ -213,6 +249,23 @@ export async function indexRange(
           },
           ctx,
         );
+        break;
+      case "trade":
+        await handleTrade(
+          db,
+          {
+            market: String(log.address ?? ""),
+            trader: String(args.trader),
+            isBuy: Boolean(args.isBuy),
+            ethWei: args.ethAmount as bigint,
+            tokenAmount: args.tokenAmount as bigint,
+            priceWei: args.newPrice as bigint,
+          },
+          ctx,
+        );
+        break;
+      case "graduated":
+        await handleGraduated(db, { market: String(log.address ?? "") }, ctx);
         break;
     }
   }

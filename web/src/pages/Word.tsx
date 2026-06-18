@@ -23,6 +23,7 @@ import { WhitelistGate } from "../components/WhitelistGate";
 import { WalletButton } from "../components/WalletButton";
 import { WatchButton } from "../components/WatchButton";
 import { Comments } from "../components/Comments";
+import { WordMarketPanel } from "../components/market/WordMarketPanel";
 import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
 import { ethLabel, friendlyError, toWei, timeAgo, normAddr } from "../lib/format";
@@ -137,6 +138,13 @@ export function Word() {
               <UserBadge address={listing.seller} size={20} />
             </p>
           )}
+        </div>
+      )}
+
+      {/* Token market (v2): coin/trading view for the claimed word. */}
+      {owner && detail?.market && (
+        <div className="mt-8">
+          <WordMarketPanel word={word} info={detail.market} onChanged={refetch} />
         </div>
       )}
 

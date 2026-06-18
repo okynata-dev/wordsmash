@@ -5,7 +5,9 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {WordNormalizer} from "./libraries/WordNormalizer.sol";
+import {WordMarket} from "./WordMarket.sol";
 
 /// @title WordRegistry
 /// @notice v1 launchpad core. The registry IS the deed ERC-721: claiming a word enforces global
@@ -38,7 +40,13 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     mapping(string => uint256) private _tokenIdOf; // normalized word => tokenId (0 if unclaimed)
     uint256[] public allTokenIds;
 
-    event WordClaimed(string word, uint256 indexed tokenId, address indexed owner);
+    // --- v2: per-word bonding-curve market ---
+    address public immutable marketImplementation; // WordMarket logic, cloned per word
+    WordMarket.Config public marketConfig;
+    mapping(uint256 => address) public marketOfTokenId; // deed tokenId => market clone
+    mapping(address => uint256) public deedOfMarket; // market clone => deed tokenId
+
+    event WordClaimed(string word, uint256 indexed tokenId, address indexed owner, address market);
     event Reserved(string word, bool reserved);
     event Whitelisted(address indexed account);
     event WhitelistRevoked(address indexed account);
@@ -49,15 +57,25 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     event ProtocolFeeReceiverUpdated(address receiver);
     event FeesWithdrawn(address indexed to, uint256 amount);
 
-    constructor(address protocolFeeReceiver_, uint256 claimFee_, uint256 maxClaimsPerAddress_, bytes32 whitelistRoot_)
-        ERC721("Word Deed", "DEED")
-        Ownable(msg.sender)
-    {
+    constructor(
+        address protocolFeeReceiver_,
+        uint256 claimFee_,
+        uint256 maxClaimsPerAddress_,
+        bytes32 whitelistRoot_,
+        address marketImplementation_,
+        WordMarket.Config memory marketConfig_
+    ) ERC721("Word Deed", "DEED") Ownable(msg.sender) {
         require(protocolFeeReceiver_ != address(0), "ZERO_RECEIVER");
+        require(marketImplementation_ != address(0), "ZERO_IMPL");
+        require(
+            marketConfig_.protocolBps + marketConfig_.deedBps + marketConfig_.liquidityBps == 10_000, "BAD_SPLIT"
+        );
         protocolFeeReceiver = protocolFeeReceiver_;
         claimFee = claimFee_;
         maxClaimsPerAddress = maxClaimsPerAddress_;
         whitelistRoot = whitelistRoot_;
+        marketImplementation = marketImplementation_;
+        marketConfig = marketConfig_;
     }
 
     // ----------------------------------------------------------------------------
@@ -85,11 +103,16 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     // Claim
     // ----------------------------------------------------------------------------
 
-    /// @notice Claim a unique word: mints its deed to the caller.
-    /// @dev v1 accepts plaintext claims, which are front-runnable (a bot can copy the word from a
+    /// @notice Claim a unique word: mints its deed AND deploys its bonding-curve token market.
+    /// @dev Accepts plaintext claims, which are front-runnable (a bot can copy the word from a
     ///      pending tx and claim it first). The closed-beta whitelist limits who can do this; a
-    ///      commit-reveal scheme is the planned mitigation for the public launch (v2).
-    function claim(string calldata rawWord) external payable nonReentrant returns (uint256 tokenId) {
+    ///      commit-reveal scheme is the planned mitigation for the public launch.
+    function claim(string calldata rawWord)
+        external
+        payable
+        nonReentrant
+        returns (uint256 tokenId, address market)
+    {
         require(isAllowed(msg.sender), "NOT_WHITELISTED");
 
         (string memory word, bool valid) = rawWord.normalize();
@@ -114,7 +137,16 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
         accruedFees += claimFee;
 
         _safeMint(msg.sender, tokenId);
-        emit WordClaimed(word, tokenId, msg.sender);
+
+        // Deploy the per-word bonding-curve market (EIP-1167 clone) and seed it with the supply.
+        market = Clones.clone(marketImplementation);
+        marketOfTokenId[tokenId] = market;
+        deedOfMarket[market] = tokenId;
+        WordMarket(payable(market)).initialize(
+            word, WordNormalizer.toUpper(word), address(this), tokenId, protocolFeeReceiver, marketConfig
+        );
+
+        emit WordClaimed(word, tokenId, msg.sender, market);
 
         uint256 refund = msg.value - claimFee;
         if (refund > 0) {
@@ -144,6 +176,13 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
         (string memory word, bool valid) = rawWord.normalize();
         if (!valid) return 0;
         return _tokenIdOf[word];
+    }
+
+    /// @notice The bonding-curve market address for a word (address(0) if unclaimed/invalid).
+    function marketOf(string calldata rawWord) external view returns (address) {
+        (string memory word, bool valid) = rawWord.normalize();
+        if (!valid) return address(0);
+        return marketOfTokenId[_tokenIdOf[word]];
     }
 
     function isClaimed(string calldata rawWord) public view returns (bool) {
@@ -235,6 +274,12 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     function setMaxClaimsPerAddress(uint256 max) external onlyOwner {
         maxClaimsPerAddress = max;
         emit MaxClaimsUpdated(max);
+    }
+
+    /// @notice Update the curve config used for FUTURE claims (existing markets keep their own).
+    function setMarketConfig(WordMarket.Config calldata cfg) external onlyOwner {
+        require(cfg.protocolBps + cfg.deedBps + cfg.liquidityBps == 10_000, "BAD_SPLIT");
+        marketConfig = cfg;
     }
 
     function setProtocolFeeReceiver(address receiver) external onlyOwner {

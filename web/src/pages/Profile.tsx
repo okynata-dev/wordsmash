@@ -16,6 +16,8 @@ const activityVerb: Record<ActivityRow["type"], string> = {
   cancel: "cancelled listing of",
   sale: "sold",
   transfer: "transferred",
+  buy: "bought",
+  sell: "sold tokens of",
 };
 
 type Tab = "owned" | "listings" | "activity";

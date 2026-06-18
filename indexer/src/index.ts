@@ -5,9 +5,12 @@ import { runIndex, reconcile, type Env as IndexEnv } from "./indexer.js";
 import {
   getWords,
   getWordDetail,
+  getWordTrades,
+  getWordChart,
   getCheck,
   getStats,
   getMarket,
+  chainMarketReader,
 } from "./api.js";
 import {
   AuthError,
@@ -198,8 +201,23 @@ export default {
         return json(await listComments(db, word, cursor));
       }
 
+      // /word/:word/trades  (v2 token-market trade log, newest-first)
+      if (parts[0] === "word" && parts[1] != null && parts[2] === "trades") {
+        const word = decodeURIComponent(parts[1]);
+        const cursor = url.searchParams.get("cursor");
+        return json(await getWordTrades(db, word, cursor));
+      }
+
+      // /word/:word/chart  (v2 token-market price series)
+      if (parts[0] === "word" && parts[1] != null && parts[2] === "chart") {
+        const word = decodeURIComponent(parts[1]);
+        return json(await getWordChart(db, word));
+      }
+
       if (parts[0] === "word" && parts[1] != null) {
-        return json(await getWordDetail(db, decodeURIComponent(parts.slice(1).join("/"))));
+        // Live market reads (marketCap/deedFees/supply) via RPC; price/volume from D1.
+        const reader = env.RPC_URL ? chainMarketReader(env.RPC_URL) : undefined;
+        return json(await getWordDetail(db, decodeURIComponent(parts.slice(1).join("/")), reader));
       }
 
       // /avatar/file/:address  (R2 bytes) — must precede /avatar/:address

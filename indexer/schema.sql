@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS words (
   claimed_at INTEGER,
   tx         TEXT,
   -- Per-token cumulative secondary-sale volume (wei, as TEXT to hold >2^53). H4.
-  volume_wei TEXT DEFAULT '0'
+  volume_wei TEXT DEFAULT '0',
+  -- v2: the per-word bonding-curve token market clone address (set in handleWordClaimed).
+  market     TEXT
 );
 
 -- M3: a mint-before-claim inserts a NULL placeholder word, so the old UNIQUE
@@ -34,6 +36,40 @@ CREATE TABLE IF NOT EXISTS sales (
   to_addr   TEXT,
   ts        INTEGER,
   tx        TEXT
+);
+
+-- ── v2 per-word bonding-curve token markets ────────────────────────────────
+-- Append-only trade log (one row per Trade event). Deduped on (tx, log_index)
+-- via processed_logs, like sales/activity. All wei values are TEXT (>2^53).
+CREATE TABLE IF NOT EXISTS trades (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  market       TEXT,
+  token_id     TEXT,
+  word         TEXT,
+  trader       TEXT,
+  is_buy       INTEGER,
+  eth_wei      TEXT,
+  token_amount TEXT,
+  price_wei    TEXT,
+  ts           INTEGER,
+  tx           TEXT,
+  log_index    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_trades_market_ts ON trades(market, ts);
+CREATE INDEX IF NOT EXISTS idx_trades_token_ts  ON trades(token_id, ts);
+
+-- Per-market running state maintained from Trade/Graduated events. volume_wei is
+-- summed with BigInt in JS (never SUM(CAST...)); last_price_wei is the latest
+-- Trade.newPrice. token_symbol is the market's ERC-20 symbol (uppercase word),
+-- known at claim time so /word detail needs no RPC for it.
+CREATE TABLE IF NOT EXISTS markets (
+  market         TEXT PRIMARY KEY,
+  token_id       TEXT,
+  word           TEXT,
+  token_symbol   TEXT,
+  volume_wei     TEXT DEFAULT '0',
+  last_price_wei TEXT DEFAULT '0',
+  graduated      INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS activity (
@@ -105,3 +141,4 @@ CREATE INDEX IF NOT EXISTS idx_sales_token    ON sales(token_id);
 CREATE INDEX IF NOT EXISTS idx_sales_word     ON sales(word);
 CREATE INDEX IF NOT EXISTS idx_listings_active ON listings(active);
 CREATE INDEX IF NOT EXISTS idx_comments_token  ON comments(token_id);
+CREATE INDEX IF NOT EXISTS idx_markets_volume   ON markets(volume_wei);

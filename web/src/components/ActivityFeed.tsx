@@ -12,6 +12,8 @@ const verb: Record<ActivityRow["type"], string> = {
   cancel: "cancelled listing of",
   sale: "sold",
   transfer: "transferred",
+  buy: "bought",
+  sell: "sold tokens of",
 };
 
 const tone: Record<ActivityRow["type"], "muted" | "positive" | "negative" | "warning"> = {
@@ -20,6 +22,8 @@ const tone: Record<ActivityRow["type"], "muted" | "positive" | "negative" | "war
   cancel: "warning",
   sale: "positive",
   transfer: "muted",
+  buy: "positive",
+  sell: "negative",
 };
 
 /**

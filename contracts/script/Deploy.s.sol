@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {WordRegistry} from "../src/WordRegistry.sol";
+import {WordMarket} from "../src/WordMarket.sol";
 import {DeedMarketplace} from "../src/DeedMarketplace.sol";
 
 /// @notice Deploys the v1 stack (registry/deed + marketplace) and writes the addresses to
@@ -29,8 +30,20 @@ contract Deploy is Script {
 
         bytes32 root = vm.parseJsonBytes32(vm.readFile("../shared/whitelist/proofs.json"), ".root");
 
+        WordMarket.Config memory curve = WordMarket.Config({
+            tradeFeeBps: 100, // 1% trade fee
+            protocolBps: 5000, // 50% to protocol
+            deedBps: 4000, // 40% to the deed owner
+            liquidityBps: 1000, // 10% to liquidity
+            tokenSupply: 1_000_000_000 ether, // 1e9 tokens per word
+            virtualEthReserve: 1 ether, // price seed
+            graduationThreshold: 10 ether // freezes the curve
+        });
+
         vm.startBroadcast(pk);
-        WordRegistry registry = new WordRegistry(protocol, claimFee, maxClaims, root);
+        WordMarket marketImpl = new WordMarket();
+        WordRegistry registry =
+            new WordRegistry(protocol, claimFee, maxClaims, root, address(marketImpl), curve);
         DeedMarketplace marketplace = new DeedMarketplace(address(registry), protocol);
 
         // TODO(operator): the real reserved list (brands, trademarks, names, slurs) is a human task.

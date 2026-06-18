@@ -1,10 +1,22 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import type { WordRow } from "@shared/types";
 import { api } from "../api";
-import { Card, ErrorState, Skeleton } from "../components/ui";
+import { Card, ErrorState, Pill, Skeleton } from "../components/ui";
 import { UserBadge } from "../components/UserBadge";
 import { ethLabel, normAddr } from "../lib/format";
+
+/**
+ * Optional per-word market fields the `sort=trading` endpoint may attach to a
+ * WordRow. Kept local + optional so we read them when present without modifying
+ * the shared WordRow type, and degrade cleanly when the API omits them.
+ */
+type TradedWordRow = WordRow & {
+  priceWei?: string;
+  marketCapWei?: string;
+  tradingVolumeWei?: string;
+};
 
 export function Top() {
   const {
@@ -13,21 +25,32 @@ export function Top() {
     refetch: refetchStats,
   } = useQuery({ queryKey: ["stats"], queryFn: api.stats, retry: 1 });
 
+  // Most-traded coins, ranked by token trading volume (v2).
+  const {
+    data: tradedResult,
+    isLoading: tradedLoading,
+    isError: tradedError,
+    refetch: refetchTraded,
+  } = useQuery({
+    queryKey: ["words", "trading"],
+    queryFn: () => api.words("trading"),
+    retry: 1,
+  });
+
+  // Existing deed-sale volume ranking, kept as the owners source.
   const {
     data: wordsResult,
-    isLoading,
     isError,
     refetch,
   } = useQuery({
     queryKey: ["words", "volume"],
-    // Follow the pagination cursor (up to a cap) so the leaderboard isn't silently
-    // truncated to the first page.
     queryFn: () => api.words("volume"),
     retry: 1,
   });
 
+  const traded = (tradedResult?.items ?? []) as TradedWordRow[];
+  const tradedTruncated = tradedResult?.truncated ?? false;
   const words = wordsResult?.items ?? [];
-  const truncated = wordsResult?.truncated ?? false;
 
   // Owners-by-holdings, derived from the words index. Key on the normalized
   // (lowercased) address so a single owner is never double-counted.
@@ -54,31 +77,59 @@ export function Top() {
         <Mini label="Volume" suffix={stats ? ethLabel(stats.totalVolumeWei) : undefined} />
       </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, c) => (
-            <Card key={c} className="divide-y divide-border">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="px-4 py-3">
-                  <Skeleton className="h-5 w-40" />
-                </div>
-              ))}
-            </Card>
-          ))}
-        </div>
-      ) : isError ? (
-        <ErrorState message="Couldn’t load the leaderboard." onRetry={() => void refetch()} />
-      ) : (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted">
-              Most traded words
-              {truncated && (
-                <span className="text-xs text-faint" title="Showing a capped slice of all words">
-                  · top results
+      {/* Most traded coins (v2 token markets) */}
+      <section className="mb-10">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted">
+          Most traded coins
+          {tradedTruncated && (
+            <span className="text-xs text-faint" title="Showing a capped slice">
+              · top results
+            </span>
+          )}
+        </h2>
+        {tradedLoading ? (
+          <Card className="divide-y divide-border">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="px-4 py-3">
+                <Skeleton className="h-5 w-48" />
+              </div>
+            ))}
+          </Card>
+        ) : tradedError ? (
+          <ErrorState message="Couldn’t load traded coins." onRetry={() => void refetchTraded()} />
+        ) : (
+          <Card className="divide-y divide-border">
+            {traded.slice(0, 20).map((w, i) => (
+              <Link
+                key={w.tokenId}
+                to={`/word/${encodeURIComponent(w.word)}`}
+                className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-surface-2"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="w-5 text-xs text-faint tabular-nums">{i + 1}</span>
+                  <span className="word-display truncate text-lg">{w.word}</span>
                 </span>
-              )}
-            </h2>
+                <span className="flex shrink-0 items-center gap-3 text-xs tabular-nums">
+                  {w.priceWei && <span className="text-muted">{ethLabel(w.priceWei)}</span>}
+                  {w.marketCapWei && (
+                    <Pill tone="positive">{ethLabel(w.marketCapWei)} mcap</Pill>
+                  )}
+                </span>
+              </Link>
+            ))}
+            {traded.length === 0 && (
+              <div className="px-4 py-6 text-sm text-muted">No traded coins yet.</div>
+            )}
+          </Card>
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-muted">Most traded words (deed sales)</h2>
+          {isError ? (
+            <ErrorState message="Couldn’t load this list." onRetry={() => void refetch()} />
+          ) : (
             <Card className="divide-y divide-border">
               {words.slice(0, 20).map((w, i) => (
                 <Link
@@ -97,38 +148,31 @@ export function Top() {
                 <div className="px-4 py-6 text-sm text-muted">No words yet.</div>
               )}
             </Card>
-          </section>
+          )}
+        </section>
 
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted">
-              Top owners by holdings
-              {truncated && (
-                <span className="text-xs text-faint" title="Derived from a capped slice of all words">
-                  · approx.
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-muted">Top owners by holdings</h2>
+          <Card className="divide-y divide-border">
+            {owners.map((o, i) => (
+              <Link
+                key={o.address}
+                to={`/profile/${o.address}`}
+                className="flex items-center justify-between px-4 py-3 transition hover:bg-surface-2"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="w-5 text-xs text-faint tabular-nums">{i + 1}</span>
+                  <UserBadge address={o.address} size={22} link={false} />
                 </span>
-              )}
-            </h2>
-            <Card className="divide-y divide-border">
-              {owners.map((o, i) => (
-                <Link
-                  key={o.address}
-                  to={`/profile/${o.address}`}
-                  className="flex items-center justify-between px-4 py-3 transition hover:bg-surface-2"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="w-5 text-xs text-faint tabular-nums">{i + 1}</span>
-                    <UserBadge address={o.address} size={22} link={false} />
-                  </span>
-                  <span className="text-xs text-muted tabular-nums">{o.count} words</span>
-                </Link>
-              ))}
-              {owners.length === 0 && (
-                <div className="px-4 py-6 text-sm text-muted">No owners yet.</div>
-              )}
-            </Card>
-          </section>
-        </div>
-      )}
+                <span className="text-xs text-muted tabular-nums">{o.count} words</span>
+              </Link>
+            ))}
+            {owners.length === 0 && (
+              <div className="px-4 py-6 text-sm text-muted">No owners yet.</div>
+            )}
+          </Card>
+        </section>
+      </div>
     </div>
   );
 }

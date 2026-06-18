@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {WordRegistry} from "../src/WordRegistry.sol";
+import {WordMarket} from "../src/WordMarket.sol";
 import {DeedMarketplace} from "../src/DeedMarketplace.sol";
 
 /// @dev Deploys the v1 stack and builds a 4-leaf Merkle whitelist (alice, bob, carol, dave) whose
@@ -24,14 +25,29 @@ abstract contract Base is Test {
 
     bytes32 internal root;
     mapping(address => bytes32[]) internal proofOf;
+    WordMarket internal marketImpl;
+
+    function _defaultCurveConfig() internal pure returns (WordMarket.Config memory) {
+        return WordMarket.Config({
+            tradeFeeBps: 100, // 1%
+            protocolBps: 5000,
+            deedBps: 4000,
+            liquidityBps: 1000,
+            tokenSupply: 1_000_000_000 ether,
+            virtualEthReserve: 1 ether,
+            graduationThreshold: 10 ether
+        });
+    }
 
     function _deploy() internal {
         _buildWhitelist();
-        registry = new WordRegistry(protocol, CLAIM_FEE, MAX_CLAIMS, root);
+        marketImpl = new WordMarket();
+        registry =
+            new WordRegistry(protocol, CLAIM_FEE, MAX_CLAIMS, root, address(marketImpl), _defaultCurveConfig());
         market = new DeedMarketplace(address(registry), protocol);
 
         for (uint256 i; i < 5; i++) {
-            vm.deal([alice, bob, carol, dave, eve][i], 100 ether);
+            vm.deal([alice, bob, carol, dave, eve][i], 1000 ether);
         }
     }
 
@@ -42,7 +58,7 @@ abstract contract Base is Test {
 
     function _claim(address who, string memory word) internal returns (uint256 tokenId) {
         vm.prank(who);
-        tokenId = registry.claim{value: CLAIM_FEE}(word);
+        (tokenId,) = registry.claim{value: CLAIM_FEE}(word);
     }
 
     // --- 4-leaf Merkle tree (sorted-pair, OZ-compatible) ---

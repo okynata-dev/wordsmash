@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {WordRegistry} from "../src/WordRegistry.sol";
+import {WordMarket} from "../src/WordMarket.sol";
 import {DeedMarketplace} from "../src/DeedMarketplace.sol";
 
 /// @notice Seeds the LOCAL anvil deployment with demo data so the app/indexer have something to show:
@@ -33,21 +34,32 @@ contract Seed is Script {
         vm.startBroadcast(PK0);
         registry.verifyWhitelist(proof0);
         registry.claim{value: fee}("genesis");
-        uint256 keepListed = registry.claim{value: fee}("wordsmash");
-        uint256 forSale = registry.claim{value: fee}("base");
+        (uint256 keepListed,) = registry.claim{value: fee}("wordsmash");
+        (uint256 forSale,) = registry.claim{value: fee}("base");
         // List both; "base" will be bought below, "wordsmash" stays on the marketplace.
         registry.setApprovalForAll(address(market), true);
         market.list(keepListed, 0.1 ether);
         market.list(forSale, 0.05 ether);
         vm.stopBroadcast();
 
-        // Account 1: enroll + buy the listed deed (creates a Sale for the leaderboard).
+        // Account 1: enroll, buy the listed deed (a Sale), and TRADE the "genesis" token market
+        // (generates Trade events, price movement, volume, and deed-owner fees for ACC0).
+        WordMarket genesisMarket = WordMarket(payable(registry.marketOf("genesis")));
         vm.startBroadcast(PK1);
         registry.verifyWhitelist(proof1);
         market.buy{value: 0.05 ether}(forSale);
+        genesisMarket.buy{value: 0.5 ether}(0); // buy genesis tokens
+        uint256 half = genesisMarket.balanceOf(ACC1) / 2;
+        genesisMarket.sell(half, 0); // sell half back -> more trades + fees
+        vm.stopBroadcast();
+
+        // Account 0 also buys a bit of its own token (more activity).
+        vm.startBroadcast(PK0);
+        genesisMarket.buy{value: 0.2 ether}(0);
         vm.stopBroadcast();
 
         console2.log("Seeded: 3 words claimed by", ACC0);
-        console2.log("Sale: 'base' bought by", ACC1);
+        console2.log("Deed sale: 'base' bought by", ACC1);
+        console2.log("Token trades on $GENESIS market:", address(genesisMarket));
     }
 }

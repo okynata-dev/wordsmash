@@ -22,6 +22,20 @@ export interface WordClaimedEvent {
   word: string; // raw word from event (already normalized on-chain)
   tokenId: bigint;
   owner: string;
+  market?: string; // v2: per-word bonding-curve market clone address
+}
+
+export interface TradeEvent {
+  market: string; // the emitting WordMarket clone (resolved from the log address)
+  trader: string;
+  isBuy: boolean;
+  ethWei: bigint; // ethAmount (ETH side of the trade)
+  tokenAmount: bigint;
+  priceWei: bigint; // newPrice after the trade
+}
+
+export interface GraduatedEvent {
+  market: string; // the emitting WordMarket clone
 }
 
 export interface TransferEvent {
@@ -117,22 +131,125 @@ export async function handleWordClaimed(
   const norm = normalizeWord(ev.word);
   const word = norm.ok ? norm.normalized : ev.word;
   const owner = ev.owner.toLowerCase();
+  const market = ev.market ? ev.market.toLowerCase() : null;
+  // The on-chain market ERC-20 symbol is the uppercase word (WordNormalizer.toUpper).
+  const symbol = word.toUpperCase();
 
   // Upsert the word row. Idempotent via PK on token_id. We keep the original
-  // claimed_at/tx if the row already exists (claim happens once).
+  // claimed_at/tx if the row already exists (claim happens once). v2: also store
+  // the market clone address so the indexer knows which contracts to watch.
   await db
     .prepare(
-      `INSERT INTO words (token_id, word, owner, claimed_at, tx)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO words (token_id, word, owner, claimed_at, tx, market)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(token_id) DO UPDATE SET
-         word = excluded.word`,
+         word = excluded.word,
+         market = COALESCE(excluded.market, words.market)`,
     )
-    .bind(tokenId, word, owner, ctx.ts, ctx.tx)
+    .bind(tokenId, word, owner, ctx.ts, ctx.tx, market)
     .run();
+
+  // v2: seed the per-market row so getLogs can resolve emitting addresses to a
+  // word. Idempotent via PK; we never clobber accumulated volume/price/graduated.
+  if (market) {
+    await db
+      .prepare(
+        `INSERT INTO markets (market, token_id, word, token_symbol, volume_wei, last_price_wei, graduated)
+         VALUES (?, ?, ?, ?, '0', '0', 0)
+         ON CONFLICT(market) DO UPDATE SET
+           token_id = excluded.token_id,
+           word = excluded.word,
+           token_symbol = excluded.token_symbol`,
+      )
+      .bind(market, tokenId, word, symbol)
+      .run();
+  }
 
   await insertActivity(db, ctx, "claim", [
     { address: owner, type: "claim", tokenId, word },
   ]);
+}
+
+export async function handleTrade(
+  db: Db,
+  ev: TradeEvent,
+  ctx: EventContext,
+): Promise<void> {
+  const market = ev.market.toLowerCase();
+  const trader = ev.trader.toLowerCase();
+
+  // Resolve the word/token for this market (from the markets row seeded at claim).
+  const m = await db
+    .prepare("SELECT token_id, word FROM markets WHERE market = ?")
+    .bind(market)
+    .first<{ token_id: string; word: string | null }>();
+  const tokenId = m?.token_id ?? "";
+  const word = m?.word ?? "";
+
+  // Append the trade row + bump market aggregates, guarded so reorg replay does
+  // not duplicate the row or double-count volume (same rule as handleSale).
+  if (!(await claimLog(db, uid(ctx, "trade")))) {
+    await db
+      .prepare(
+        `INSERT INTO trades (market, token_id, word, trader, is_buy, eth_wei, token_amount, price_wei, ts, tx, log_index)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        market,
+        tokenId,
+        word,
+        trader,
+        ev.isBuy ? 1 : 0,
+        ev.ethWei.toString(),
+        ev.tokenAmount.toString(),
+        ev.priceWei.toString(),
+        ctx.ts,
+        ctx.tx,
+        ctx.logIndex,
+      )
+      .run();
+
+    // volume += ethAmount (BigInt, TEXT); last_price_wei = newPrice.
+    const cur = await db
+      .prepare("SELECT volume_wei FROM markets WHERE market = ?")
+      .bind(market)
+      .first<{ volume_wei: string | null }>();
+    const newVol = (BigInt(cur?.volume_wei ?? "0") + ev.ethWei).toString();
+    await db
+      .prepare(
+        `INSERT INTO markets (market, token_id, word, volume_wei, last_price_wei, graduated)
+         VALUES (?, ?, ?, ?, ?, 0)
+         ON CONFLICT(market) DO UPDATE SET
+           volume_wei = excluded.volume_wei,
+           last_price_wei = excluded.last_price_wei`,
+      )
+      .bind(market, tokenId, word, newVol, ev.priceWei.toString())
+      .run();
+  }
+
+  // Feed the activity table/feed: buys and sells show up like sales do.
+  await insertActivity(db, ctx, "trade", [
+    {
+      address: trader,
+      type: ev.isBuy ? "buy" : "sell",
+      tokenId,
+      word,
+      price: ev.ethWei.toString(),
+    },
+  ]);
+}
+
+export async function handleGraduated(
+  db: Db,
+  ev: GraduatedEvent,
+  _ctx: EventContext,
+): Promise<void> {
+  const market = ev.market.toLowerCase();
+  // Idempotent: setting graduated=1 repeatedly is a no-op.
+  await db
+    .prepare("UPDATE markets SET graduated = 1 WHERE market = ?")
+    .bind(market)
+    .run();
 }
 
 export async function handleTransfer(

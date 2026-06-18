@@ -1,4 +1,4 @@
-import { formatEther } from "viem";
+import { formatEther, formatUnits } from "viem";
 
 /** Short address: 0x1234…abcd */
 export function shortAddr(addr?: string | null): string {
@@ -34,19 +34,55 @@ export function toWei(wei: string | bigint | null | undefined): bigint | null {
   }
 }
 
-/** Format wei (decimal string or bigint) as a trimmed ETH amount with dot decimals. */
+/** Format wei (decimal string or bigint) as a readable ETH amount with dot decimals. */
 export function formatEthAmount(wei: string | bigint): string {
   const v = toWei(wei) ?? 0n;
-  const s = formatEther(v);
-  // Trim trailing zeros but keep at least one decimal place when fractional.
-  if (s.includes(".")) {
-    return s.replace(/\.?0+$/, "");
+  const s = formatEther(v); // full-precision decimal string (no float involved)
+  if (!s.includes(".")) return groupThousands(s);
+
+  const [int, frac] = s.split(".");
+  let out: string;
+  if (int !== "0") {
+    // >= 1 ETH: 4 decimals is plenty.
+    out = `${groupThousands(int)}.${frac.slice(0, 4)}`;
+  } else {
+    // < 1 ETH: keep ~4 significant digits past the leading zeros, so both 0.5535 and a
+    // tiny token price like 0.0000000019 stay readable without dumping 18 decimals.
+    const lead = frac.match(/^0*/)?.[0].length ?? 0;
+    out = `0.${frac.slice(0, Math.min(frac.length, lead + 4))}`;
   }
-  return s;
+  return out.includes(".") ? out.replace(/\.?0+$/, "") : out;
+}
+
+function groupThousands(intStr: string): string {
+  return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 export function ethLabel(wei: string | bigint): string {
   return `${formatEthAmount(wei)} ETH`;
+}
+
+/**
+ * Format a token base-unit amount (string or bigint, 18 decimals) as a trimmed,
+ * human-readable number. Mirrors formatEthAmount's trimming so token counts read
+ * cleanly (e.g. "1,234.5") without locale/precision pitfalls — we group thousands
+ * on the integer part only and never touch the BigInt-derived fractional digits.
+ */
+export function formatTokens(amount: string | bigint, decimals = 18): string {
+  const v = toWei(amount) ?? 0n;
+  let s = formatUnits(v, decimals);
+  if (s.includes(".")) {
+    s = s.replace(/\.?0+$/, "");
+  }
+  const [int, frac] = s.split(".");
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return frac ? `${grouped}.${frac}` : grouped;
+}
+
+/** Token amount with its symbol suffix, e.g. "1,234.5 BREAD". */
+export function tokenLabel(amount: string | bigint, symbol?: string | null): string {
+  const n = formatTokens(amount);
+  return symbol ? `${n} ${symbol}` : n;
 }
 
 /** Relative time from a unix-seconds timestamp. */

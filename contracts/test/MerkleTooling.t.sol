@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {WordRegistry} from "../src/WordRegistry.sol";
+import {WordMarket} from "../src/WordMarket.sol";
 
 /// @notice Proves the off-chain Merkle tool (contracts/tools/merkle.mjs) emits a root + proofs that
 ///         the on-chain gate accepts. Reads the SAME shared/whitelist/proofs.json the frontend ships.
@@ -20,7 +21,15 @@ contract MerkleToolingTest is Test {
         string memory json = vm.readFile("../shared/whitelist/proofs.json");
         bytes32 root = vm.parseJsonBytes32(json, ".root");
 
-        WordRegistry registry = new WordRegistry(address(0xBEEF), 0, 0, root);
+        WordMarket impl = new WordMarket();
+        WordRegistry registry = new WordRegistry(
+            address(0xBEEF),
+            0,
+            0,
+            root,
+            address(impl),
+            WordMarket.Config(100, 5000, 4000, 1000, 1_000_000_000 ether, 1 ether, 10 ether)
+        );
 
         for (uint256 i; i < ACCOUNTS.length; i++) {
             address acct = ACCOUNTS[i];

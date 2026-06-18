@@ -51,6 +51,17 @@ library WordNormalizer {
         return (string(result), true);
     }
 
+    /// @notice Uppercase ASCII of an already-normalized word — used for the per-word ERC-20 ticker.
+    function toUpper(string memory normalized) internal pure returns (string memory) {
+        bytes memory b = bytes(normalized);
+        bytes memory result = new bytes(b.length);
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 c = b[i];
+            result[i] = (c >= 0x61 && c <= 0x7A) ? bytes1(uint8(c) - 32) : c;
+        }
+        return string(result);
+    }
+
     function _isWhitespace(bytes1 c) private pure returns (bool) {
         return c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D;
     }

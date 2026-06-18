@@ -182,7 +182,7 @@ contract WordRegistryTest is Base {
         // Open phase: eve claims while the gate is off (her cached bool is never set).
         registry.setWhitelistEnabled(false);
         vm.prank(eve);
-        uint256 id = registry.claim{value: CLAIM_FEE}("bread");
+        (uint256 id,) = registry.claim{value: CLAIM_FEE}("bread");
         // Gate re-enabled for public-launch rollback: eve can't transfer (stranded)...
         registry.setWhitelistEnabled(true);
         _enroll(bob);

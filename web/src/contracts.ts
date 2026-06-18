@@ -3,11 +3,11 @@
 // uses .js import specifiers that don't resolve under the bundler alias).
 
 import { keccak256, toBytes, encodePacked, type Address } from "viem";
-import { wordRegistryAbi, deedMarketplaceAbi } from "@shared/abis";
+import { wordRegistryAbi, deedMarketplaceAbi, wordMarketAbi } from "@shared/abis";
 import { normalizeWord } from "@shared/normalize";
 import { WORD_REGISTRY, DEED_MARKETPLACE } from "./config";
 
-export { wordRegistryAbi, deedMarketplaceAbi };
+export { wordRegistryAbi, deedMarketplaceAbi, wordMarketAbi };
 
 export const registryAddress = WORD_REGISTRY as Address;
 export const marketplaceAddress = DEED_MARKETPLACE as Address;

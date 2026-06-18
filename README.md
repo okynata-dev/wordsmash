@@ -8,11 +8,15 @@ address has a profile of the words it owns and its activity.
 > ⚠️ **Experimental testnet software (Base Sepolia). Not an investment product.** No returns are
 > promised or implied. Testnet only — no mainnet config, no real-fund paths.
 
-**v1 scope:** claim + ownership + marketplace + closed-beta whitelist + anti-bot limit + share/OG
-flywheel, plus a full **social layer** — rich user profiles (avatar, bio, X/Twitter, username,
-website), per-word comments, search, a live activity feed, and watchlists. **Not in v1:** any token
-trading / bonding curve / per-word ERC-20 (that's v2, post-audit + legal review — deliberately not
-built here). The word/deed itself stays imageless; only *users* get avatars.
+**Scope:** claim + ownership + deed marketplace + closed-beta whitelist + anti-bot limit + share/OG
+flywheel; a full **social layer** (rich profiles with avatar/bio/X/username/website, per-word
+comments, search, live activity feed, watchlists); and a **per-word bonding-curve token market** —
+claiming a word deploys its ERC-20, people buy/sell on the curve (pump.fun style), and trading fees
+flow to the deed holder. The word/deed itself stays imageless; only *users* get avatars.
+
+See **[DESIGN.md](DESIGN.md)** for how the system is designed against known launchpad failure modes
+(the pump.fun admin-drain exploit, sniping/MEV, rug pulls, graduation). **Still testnet-only and not
+professionally audited — not for real funds.**
 
 ## Monorepo
 

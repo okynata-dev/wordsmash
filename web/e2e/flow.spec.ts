@@ -20,7 +20,9 @@ test("claim a word, list it, and buy it from a second account", async ({ page, r
   };
   // Enroll via the whitelist gate if it is shown (one verifyWhitelist tx, auto-signed by anvil).
   const enrollIfNeeded = async () => {
-    const enroll = page.getByRole("button", { name: /enroll|verify whitelist/i });
+    // A word page can show MORE than one whitelist gate (deed area + token market), so target the
+    // first. One enroll tx whitelists the wallet globally, opening every gate.
+    const enroll = page.getByRole("button", { name: /enroll|verify whitelist/i }).first();
     // The gate reads isAllowed() from chain async — wait for it to settle before deciding.
     await enroll.waitFor({ state: "visible", timeout: 10_000 }).catch(() => {});
     if (await enroll.isVisible().catch(() => false)) {
@@ -68,7 +70,8 @@ test("claim a word, list it, and buy it from a second account", async ({ page, r
   if (await connect.isVisible().catch(() => false)) await connect.click();
   await expect(page.getByRole("button", { name: /0x90f7/i })).toBeVisible({ timeout: 15_000 });
   await enrollIfNeeded();
-  await page.getByRole("button", { name: /^buy/i }).first().click();
+  // The DEED buy button is labelled "Buy · <price> ETH"; the token-market buy is just "Buy".
+  await page.getByRole("button", { name: /buy.*eth/i }).first().click();
   await page.waitForTimeout(2000);
   await reindex();
 

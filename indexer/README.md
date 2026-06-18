@@ -45,8 +45,13 @@ loads `schema.sql` into an in-memory database — no Cloudflare runtime needed.
 
 CORS: `GET` allowed from any origin (public read API).
 
-- `GET /words?sort=recent|volume&cursor=` → `Paginated<WordRow>` (volume = sum of sale prices)
-- `GET /word/:word` → `WordDetail` (path param normalized; `owner` null if unclaimed)
+- `GET /words?sort=recent|volume|trading&cursor=` → `Paginated<WordRow>`
+  - `volume` = DEED secondary-sale volume (`words.volume_wei`, sum of marketplace sale prices)
+  - `trading` = v2 TOKEN bonding-curve volume (`markets.volume_wei`, sum of trade ETH amounts) — a distinct metric
+- `GET /word/:word` → `WordDetail` (path param normalized; `owner` null if unclaimed; `market` = `MarketInfo | null`)
+  - market `priceWei`/`volumeWei`/`graduated`/`tokenSymbol` come from D1 (the `markets` row maintained from `Trade`/`Graduated` events — no RPC); `marketCapWei`/`deedFeesWei`/`tokenSupply` are live contract reads over `RPC_URL` (fall back to `"0"` if RPC is absent/unreachable)
+- `GET /word/:word/trades?cursor=` → `Paginated<TradeRow>` (v2 token-market trades, newest-first)
+- `GET /word/:word/chart` → `PricePoint[]` (price series from trades, oldest→newest, last 200 points)
 - `GET /profile/:address` → `Profile`
 - `GET /check/:word` → `CheckResult` (uses shared `normalizeWord`)
 - `GET /stats` → `Stats`
