@@ -1,0 +1,27 @@
+{
+  "_comment": "Canonical normalization test vectors. Asserted by BOTH the TS suite (shared/test) and the Solidity suite (contracts/test/Normalization.t.sol) to prove identical canonical output. input -> {valid, normalized}.",
+  "vectors": [
+    { "input": "bread", "valid": true, "normalized": "bread" },
+    { "input": "BREAD", "valid": true, "normalized": "bread" },
+    { "input": "Bread", "valid": true, "normalized": "bread" },
+    { "input": "  bread  ", "valid": true, "normalized": "bread" },
+    { "input": "\tBread\n", "valid": true, "normalized": "bread" },
+    { "input": "brhead", "valid": true, "normalized": "brhead" },
+    { "input": "8read", "valid": true, "normalized": "8read" },
+    { "input": "web3", "valid": true, "normalized": "web3" },
+    { "input": "a", "valid": true, "normalized": "a" },
+    { "input": "0", "valid": true, "normalized": "0" },
+    { "input": "ABCDEFGHIJ0123456789abcdefghij", "valid": true, "normalized": "abcdefghij0123456789abcdefghij" },
+    { "input": "", "valid": false, "normalized": "" },
+    { "input": "   ", "valid": false, "normalized": "" },
+    { "input": "br ead", "valid": false, "normalized": "" },
+    { "input": "bread!", "valid": false, "normalized": "" },
+    { "input": "bread.", "valid": false, "normalized": "" },
+    { "input": "_bread", "valid": false, "normalized": "" },
+    { "input": "bread-2", "valid": false, "normalized": "" },
+    { "input": "brёad", "valid": false, "normalized": "" },
+    { "input": "café", "valid": false, "normalized": "" },
+    { "input": "ＢＲＥＡＤ", "valid": false, "normalized": "" },
+    { "input": "abcdefghij0123456789abcdefghijx", "valid": false, "normalized": "" }
+  ]
+}

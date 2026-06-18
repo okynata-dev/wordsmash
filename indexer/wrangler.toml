@@ -1,0 +1,44 @@
+name = "wordsmash-indexer"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# --- D1 ---------------------------------------------------------------------
+# TODO(operator): create the DB and paste its id:
+#   wrangler d1 create wordsmash
+#   wrangler d1 execute wordsmash --file=./schema.sql   (add --remote for prod)
+[[d1_databases]]
+binding = "DB"
+database_name = "wordsmash"
+database_id = "TODO_OPERATOR_D1_DATABASE_ID" # TODO(operator): real D1 id
+
+# --- Vars -------------------------------------------------------------------
+# TODO(operator): set these for your target network. For anvil, use the local
+# RPC and the addresses from contracts/deployments/anvil.json.
+[vars]
+# Defaults below are the LOCAL anvil deployment (deterministic addresses from a fresh
+# `make deploy`). TODO(operator): override REGISTRY/MARKETPLACE/RPC_URL/START_BLOCK for Base Sepolia.
+RPC_URL = "http://127.0.0.1:8545"            # TODO(operator): chain RPC URL
+REGISTRY = "0x5FbDB2315678afecb367f032d93F642f64180aa3"     # local anvil default; TODO(operator) for testnet
+MARKETPLACE = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"  # local anvil default; TODO(operator) for testnet
+START_BLOCK = "0"                            # TODO(operator): deployment block
+WEB_APP_BASE = "http://localhost:5173"       # TODO(operator): web app base url for /share redirects
+# C1: bearer token guarding POST /admin/*. TODO(operator): replace with a strong secret
+# (prefer `wrangler secret put ADMIN_TOKEN` in prod rather than committing it here).
+ADMIN_TOKEN = "TODO_OPERATOR_ADMIN_TOKEN"    # TODO(operator): admin bearer token
+# Public base URL of THIS worker; used to build R2-backed avatar URLs
+# (${PUBLIC_BASE}/avatar/file/:address). TODO(operator): set to the deployed worker origin.
+PUBLIC_BASE = "http://127.0.0.1:8787"        # TODO(operator): this worker's public base url
+
+# --- R2 (avatars) -----------------------------------------------------------
+# Optional: bind an R2 bucket to store uploaded avatar bytes. When this binding is
+# absent (e.g. local dev), avatar uploads fall back to storing the data URL inline.
+# TODO(operator): create the bucket and uncomment to enable R2-backed avatars:
+#   wrangler r2 bucket create wordsmash-avatars
+# [[r2_buckets]]
+# binding = "AVATARS"
+# bucket_name = "wordsmash-avatars"  # TODO(operator): real bucket name
+
+# --- Cron -------------------------------------------------------------------
+[triggers]
+crons = ["*/1 * * * *"] # every minute: runIndex + reconcile

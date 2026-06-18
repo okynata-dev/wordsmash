@@ -1,0 +1,13 @@
+{
+  "name": "@wordsmash/tools",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Off-chain tooling: build the whitelist Merkle root + proofs from an address list.",
+  "scripts": {
+    "merkle": "node merkle.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  }
+}
