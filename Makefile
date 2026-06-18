@@ -65,6 +65,19 @@ web-dev: ## Run the frontend (Vite). Set web/.env first (VITE_USE_ANVIL=1 for lo
 e2e: ## Playwright end-to-end (expects chain+indexer+web already running)
 	cd web && npx playwright test
 
+## ─── Deploy (Base Sepolia + Cloudflare). See DEPLOY.md. ───────────────────────
+deploy-contracts: ## Deploy contracts to Base Sepolia (needs DEPLOYER_PRIVATE_KEY + BASE_SEPOLIA_RPC_URL)
+	cd contracts && forge script script/Deploy.s.sol:Deploy --rpc-url $(BASE_SEPOLIA_RPC_URL) --broadcast --verify
+
+wire: ## Wire deployed addresses into indexer/wrangler.toml + web/.env.production
+	node scripts/wire-deploy.mjs baseSepolia --rpc "$(BASE_SEPOLIA_RPC_URL)" $(if $(API),--api $(API),)
+
+deploy-indexer: ## Deploy the indexer Worker (needs wrangler auth; D1/secret set per DEPLOY.md)
+	cd indexer && wrangler deploy
+
+deploy-web: ## Build + deploy the web app to Cloudflare Pages
+	cd web && npm run build && wrangler pages deploy dist --project-name wordsmash
+
 clean: ## Remove build artifacts
 	rm -rf contracts/out contracts/cache web/dist
 	@echo "cleaned"

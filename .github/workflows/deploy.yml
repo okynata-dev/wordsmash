@@ -1,0 +1,58 @@
+name: Deploy (Cloudflare)
+
+# Manual one-click deploy of the indexer Worker + the web Pages app.
+# Contract deployment stays manual (it spends testnet funds) — see DEPLOY.md.
+#
+# Required repo secrets:   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+# Required repo variables: VITE_API_URL, VITE_WORD_REGISTRY, VITE_DEED_MARKETPLACE
+#                          (optional) VITE_WALLETCONNECT_PROJECT_ID
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: What to deploy
+        type: choice
+        options: [both, indexer, web]
+        default: both
+
+jobs:
+  indexer:
+    if: ${{ inputs.target == 'both' || inputs.target == 'indexer' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd shared && npm install
+      - run: cd indexer && npm install
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: indexer
+          command: deploy
+
+  web:
+    if: ${{ inputs.target == 'both' || inputs.target == 'web' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd shared && npm install
+      - name: Build
+        working-directory: web
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_WORD_REGISTRY: ${{ vars.VITE_WORD_REGISTRY }}
+          VITE_DEED_MARKETPLACE: ${{ vars.VITE_DEED_MARKETPLACE }}
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ vars.VITE_WALLETCONNECT_PROJECT_ID }}
+        run: npm install && npm run build
+      - name: Deploy Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: pages deploy dist --project-name wordsmash
