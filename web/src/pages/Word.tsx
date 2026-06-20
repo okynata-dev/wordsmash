@@ -33,6 +33,7 @@ import {
   useIsWhitelisted,
 } from "../hooks/useRegistry";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export function Word() {
   const { word = "" } = useParams();
@@ -53,6 +54,7 @@ export function Word() {
   const tokenId = wordToTokenId(word);
   // Always display the canonical form, never the raw URL param (e.g. /word/BREAD -> "bread").
   const display = detail?.word || normalizeWord(word).normalized || word.toLowerCase();
+  useDocumentTitle(display);
 
   const owner = detail?.owner ?? null;
   const listing = detail?.listing ?? null;

@@ -5,8 +5,10 @@ import { WalletButton } from "../components/WalletButton";
 import { LiveBadge } from "../components/ActivityFeed";
 import { Card, ErrorState, Skeleton } from "../components/ui";
 import { timeAgo } from "../lib/format";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export function Watchlist() {
+  useDocumentTitle("Watchlist");
   const { address, isConnected } = useAccount();
   const { data, isLoading, isError, refetch } = useWatchlist(address);
   const count = data?.length ?? 0;

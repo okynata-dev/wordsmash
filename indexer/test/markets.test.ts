@@ -160,6 +160,47 @@ describe("handleTrade", () => {
     expect(buy?.word).toBe("bread");
     expect(buy?.price).toBe(BIG_A.toString());
   });
+
+  it("counts distinct traders incrementally (M-2), not double-counting repeats", async () => {
+    const db = await freshDb();
+    await claimBread(db);
+
+    // bob buys, carol buys, bob sells again -> 2 distinct traders, not 3.
+    await handleTrade(
+      db,
+      { market: MARKET, trader: A.bob, isBuy: true, ethWei: BIG_A, tokenAmount: 100n, priceWei: 11n },
+      { tx: "0xa", logIndex: 0, ts: 110 },
+    );
+    await handleTrade(
+      db,
+      { market: MARKET, trader: A.carol, isBuy: true, ethWei: BIG_A, tokenAmount: 100n, priceWei: 12n },
+      { tx: "0xb", logIndex: 0, ts: 120 },
+    );
+    await handleTrade(
+      db,
+      { market: MARKET, trader: A.bob, isBuy: false, ethWei: BIG_B, tokenAmount: 40n, priceWei: 9n },
+      { tx: "0xc", logIndex: 0, ts: 130 },
+    );
+
+    const m = await db
+      .prepare("SELECT traders FROM markets WHERE market = ?")
+      .bind(MARKET)
+      .first<{ traders: number }>();
+    expect(m?.traders).toBe(2);
+    expect(await count(db, "market_traders")).toBe(2);
+
+    // A reorg replay of bob's first buy must not re-bump the counter.
+    await handleTrade(
+      db,
+      { market: MARKET, trader: A.bob, isBuy: true, ethWei: BIG_A, tokenAmount: 100n, priceWei: 11n },
+      { tx: "0xa", logIndex: 0, ts: 110 },
+    );
+    const m2 = await db
+      .prepare("SELECT traders FROM markets WHERE market = ?")
+      .bind(MARKET)
+      .first<{ traders: number }>();
+    expect(m2?.traders).toBe(2);
+  });
 });
 
 describe("handleGraduated", () => {

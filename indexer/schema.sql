@@ -72,9 +72,28 @@ CREATE TABLE IF NOT EXISTS markets (
   -- approx curve ETH reserve, maintained from Trade events (powers the "about to graduate"
   -- ranking; the coin page uses the exact live on-chain value). buy:+ethIn, sell:-grossEthOut.
   real_eth_reserve TEXT DEFAULT '0',
+  -- M-2: distinct-trader count, maintained incrementally from Trade events (see market_traders)
+  -- so /word never runs COUNT(DISTINCT trader) over the trades table per request.
+  traders        INTEGER DEFAULT 0,
   graduated      INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_markets_reserve ON markets(real_eth_reserve);
+
+-- M-2: the distinct (market, trader) set backing markets.traders. INSERT OR IGNORE on each
+-- Trade is a no-op for a returning trader; only a new pair bumps the counter.
+CREATE TABLE IF NOT EXISTS market_traders (
+  market TEXT NOT NULL,
+  trader TEXT NOT NULL,
+  PRIMARY KEY (market, trader)
+);
+
+-- One-time idempotent backfill so markets predating the counter report correctly.
+-- INSERT OR IGNORE adds nothing on re-run; the UPDATE recomputes from the set (a
+-- migration-time op, never per request).
+INSERT OR IGNORE INTO market_traders (market, trader) SELECT market, trader FROM trades;
+UPDATE markets SET traders = (
+  SELECT COUNT(*) FROM market_traders mt WHERE mt.market = markets.market
+);
 
 CREATE TABLE IF NOT EXISTS activity (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

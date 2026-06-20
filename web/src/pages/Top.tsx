@@ -6,6 +6,7 @@ import { api } from "../api";
 import { Card, ErrorState, Pill, Skeleton } from "../components/ui";
 import { UserBadge } from "../components/UserBadge";
 import { ethLabel, normAddr } from "../lib/format";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 /**
  * Optional per-word market fields the `sort=trading` endpoint may attach to a
@@ -22,6 +23,7 @@ type TradedWordRow = WordRow & {
 const TOP_COLS = "grid-cols-[40px_1fr_minmax(80px,120px)_minmax(80px,120px)]";
 
 export function Top() {
+  useDocumentTitle("Top words");
   const {
     data: stats,
     isError: statsError,

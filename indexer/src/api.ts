@@ -117,9 +117,24 @@ export interface MarketChainReads {
 }
 export type MarketReader = (market: string) => Promise<MarketChainReads | null>;
 
+/** TTL for the per-market on-chain read cache (M-1). Coin pages poll and get
+ * repeat views, so a short cache collapses bursts of identical /word requests
+ * from 5 RPC round-trips each to one fetch per market per window. */
+const MARKET_READ_TTL_MS = 4_000;
+
 export function chainMarketReader(rpcUrl: string): MarketReader {
   const client = createPublicClient({ transport: http(rpcUrl) });
+  // Per-isolate micro-cache: { value, at }. Bounded by the number of distinct
+  // markets viewed within a warm isolate; entries are overwritten on refresh.
+  const cache = new Map<string, { at: number; val: MarketChainReads | null }>();
+
   return async (market: string) => {
+    const key = market.toLowerCase();
+    const now = Date.now();
+    const hit = cache.get(key);
+    if (hit && now - hit.at < MARKET_READ_TTL_MS) return hit.val;
+
+    let val: MarketChainReads | null = null;
     try {
       const m = { address: market as `0x${string}`, abi: wordMarketAbi } as const;
       const [cap, fees, supply, reserve, threshold] = await Promise.all([
@@ -129,7 +144,7 @@ export function chainMarketReader(rpcUrl: string): MarketReader {
         client.readContract({ ...m, functionName: "realEthReserve" }),
         client.readContract({ ...m, functionName: "graduationThreshold" }),
       ]);
-      return {
+      val = {
         marketCapWei: (cap as bigint).toString(),
         deedFeesWei: (fees as bigint).toString(),
         tokenSupply: (supply as bigint).toString(),
@@ -137,8 +152,12 @@ export function chainMarketReader(rpcUrl: string): MarketReader {
         graduationThresholdWei: (threshold as bigint).toString(),
       };
     } catch {
-      return null;
+      val = null;
     }
+    // Cache successes only — a transient RPC failure shouldn't pin a null for
+    // the whole TTL; the next request retries immediately.
+    if (val) cache.set(key, { at: now, val });
+    return val;
   };
 }
 
@@ -274,21 +293,23 @@ export async function getWordDetail(
   let market: MarketInfo | null = null;
   if (wordRow.market) {
     const m = await db
-      .prepare("SELECT market, token_symbol, volume_wei, last_price_wei, graduated FROM markets WHERE market = ?")
+      .prepare(
+        "SELECT market, token_symbol, volume_wei, last_price_wei, traders, graduated FROM markets WHERE market = ?",
+      )
       .bind(wordRow.market.toLowerCase())
       .first<{
         market: string;
         token_symbol: string | null;
         volume_wei: string | null;
         last_price_wei: string | null;
+        traders: number | null;
         graduated: number;
       }>();
     if (m) {
       const live = reader ? await reader(m.market) : null;
-      const traders = await db
-        .prepare("SELECT COUNT(DISTINCT trader) AS c FROM trades WHERE market = ?")
-        .bind(m.market)
-        .first<{ c: number }>();
+      // M-2: distinct-trader count is maintained incrementally in handleTrade
+      // (markets.traders + the market_traders set), so /word no longer scans
+      // the trades table with COUNT(DISTINCT) on every request.
       const reserve = live?.realEthReserveWei ?? "0";
       const threshold = live?.graduationThresholdWei ?? "0";
       // Self-heal the approximate D1 reserve (which drives the discovery-board FOMO bars) with the
@@ -311,7 +332,7 @@ export async function getWordDetail(
         realEthReserveWei: reserve,
         graduationThresholdWei: threshold,
         graduationProgressBps: progressBps(reserve, threshold),
-        traders: Number(traders?.c ?? 0),
+        traders: m.traders ?? 0,
       };
     }
   }

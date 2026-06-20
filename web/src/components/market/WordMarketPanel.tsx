@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import type { MarketInfo } from "@shared/types";
@@ -68,6 +69,19 @@ export function WordMarketPanel({
   const isDeedOwner =
     Boolean(address) && Boolean(deedOwner) && normAddr(address) === normAddr(deedOwner);
 
+  // Flash the price green/red for ~1s whenever it ticks — the live "wow" beat.
+  const [priceFlash, setPriceFlash] = useState<"" | "price-up" | "price-down">("");
+  const prevPrice = useRef<bigint | undefined>(undefined);
+  useEffect(() => {
+    if (priceWei === undefined) return;
+    const prev = prevPrice.current;
+    prevPrice.current = priceWei;
+    if (prev === undefined || priceWei === prev) return;
+    setPriceFlash(priceWei > prev ? "price-up" : "price-down");
+    const t = setTimeout(() => setPriceFlash(""), 1000);
+    return () => clearTimeout(t);
+  }, [priceWei]);
+
   // No market indexed yet (fresh claim mid-sync, or API not live). Keep it quiet —
   // the deed sections still render above this panel.
   if (!info || !marketAddr) {
@@ -95,7 +109,7 @@ export function WordMarketPanel({
                   </span>
                 )}
               </div>
-              <div className="mt-1 text-3xl font-semibold tabular-nums sm:text-4xl">
+              <div className={`mt-1 text-3xl font-semibold tabular-nums sm:text-4xl ${priceFlash}`}>
                 {priceWei !== undefined ? ethLabel(priceWei) : <Skeleton className="h-9 w-40" />}
               </div>
             </div>

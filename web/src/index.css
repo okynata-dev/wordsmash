@@ -148,10 +148,12 @@ body {
   content: "";
   position: absolute;
   inset: 0;
+  /* Foreground-tinted so the shimmer reads over the bar in BOTH themes — a fixed
+     white streak vanished against the light-mode track. */
   background-image: linear-gradient(
     90deg,
     transparent,
-    rgb(255 255 255 / 0.35),
+    rgb(var(--c-fg) / 0.18),
     transparent
   );
   width: 40%;

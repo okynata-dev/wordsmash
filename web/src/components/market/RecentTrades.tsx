@@ -17,6 +17,9 @@ function tradeKey(t: TradeRow): string {
   return `${t.tx}-${t.trader}-${t.ts}-${t.tokenAmount}`;
 }
 
+// Cap the dedup set so a long-lived coin page doesn't leak memory across polls.
+const MAX_SEEN = 500;
+
 /**
  * Recent token-market trades for a word. Reads the first page of GET
  * /word/:word/trades, polls fast for a live feel, and animates newly-arrived
@@ -54,6 +57,16 @@ export function RecentTrades({ word, symbol }: { word: string; symbol?: string |
       }
     });
     if (fresh.size > 0) setFreshKeys(fresh);
+
+    // Bound memory: keep only the most-recent keys (Sets iterate insertion-order,
+    // so the leading entries are the oldest).
+    if (seen.current.size > MAX_SEEN) {
+      let toDrop = seen.current.size - MAX_SEEN;
+      for (const k of seen.current) {
+        seen.current.delete(k);
+        if (--toDrop <= 0) break;
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 

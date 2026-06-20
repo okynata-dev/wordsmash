@@ -177,6 +177,23 @@ export function Home() {
             id="claim-word-input"
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter claims when the happy path is satisfied (mirrors the button's
+              // enabled state); whitelist edge cases still surface via the toast.
+              if (
+                e.key === "Enter" &&
+                state.kind === "available" &&
+                isConnected &&
+                !wrongNetwork &&
+                !outOfClaims &&
+                claimFee !== undefined &&
+                !isPending &&
+                !confirming &&
+                !syncing
+              ) {
+                doClaim();
+              }
+            }}
             placeholder="type a word"
             autoCapitalize="none"
             autoCorrect="off"

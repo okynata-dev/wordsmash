@@ -19,11 +19,13 @@ import {
   useIsWhitelisted,
 } from "../hooks/useRegistry";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import type { ListingRow } from "@shared/types";
 
 type Sort = "recent" | "price-asc" | "price-desc";
 
 export function Market() {
+  useDocumentTitle("Market");
   const [sort, setSort] = useState<Sort>("recent");
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["market"],

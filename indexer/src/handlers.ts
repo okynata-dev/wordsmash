@@ -223,16 +223,34 @@ export async function handleTrade(
     if (ev.isBuy) reserve += (ev.ethWei * (10000n - FEE_BPS)) / 10000n;
     else reserve -= (ev.ethWei * 10000n) / (10000n - FEE_BPS);
     if (reserve < 0n) reserve = 0n;
+
+    // M-2: maintain the distinct-trader count incrementally. A returning trader is
+    // a no-op; only a first-seen (market, trader) pair bumps markets.traders. The
+    // existence check is an O(1) PK lookup (the Db abstraction's run() doesn't
+    // surface changes()), and the whole block is reorg-guarded by claimLog above.
+    const known = await db
+      .prepare("SELECT 1 FROM market_traders WHERE market = ? AND trader = ?")
+      .bind(market, trader)
+      .first<{ 1: number }>();
+    const traderInc = known ? 0 : 1;
+    if (traderInc) {
+      await db
+        .prepare("INSERT OR IGNORE INTO market_traders (market, trader) VALUES (?, ?)")
+        .bind(market, trader)
+        .run();
+    }
+
     await db
       .prepare(
-        `INSERT INTO markets (market, token_id, word, volume_wei, last_price_wei, real_eth_reserve, graduated)
-         VALUES (?, ?, ?, ?, ?, ?, 0)
+        `INSERT INTO markets (market, token_id, word, volume_wei, last_price_wei, real_eth_reserve, traders, graduated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
          ON CONFLICT(market) DO UPDATE SET
            volume_wei = excluded.volume_wei,
            last_price_wei = excluded.last_price_wei,
-           real_eth_reserve = excluded.real_eth_reserve`,
+           real_eth_reserve = excluded.real_eth_reserve,
+           traders = markets.traders + excluded.traders`,
       )
-      .bind(market, tokenId, word, newVol, ev.priceWei.toString(), reserve.toString())
+      .bind(market, tokenId, word, newVol, ev.priceWei.toString(), reserve.toString(), traderInc)
       .run();
   }
 

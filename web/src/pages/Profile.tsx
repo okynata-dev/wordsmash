@@ -8,6 +8,7 @@ import { Avatar } from "../components/Avatar";
 import { EditProfile } from "../components/EditProfile";
 import { Button, Card, Pill, ErrorState, Skeleton } from "../components/ui";
 import { ethLabel, shortAddr, timeAgo, normAddr } from "../lib/format";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import type { ActivityRow } from "@shared/types";
 
 const activityVerb: Record<ActivityRow["type"], string> = {
@@ -33,6 +34,7 @@ export function Profile() {
 
   const meta = data?.meta;
   const displayName = meta?.username ? `@${meta.username}` : shortAddr(address);
+  useDocumentTitle(displayName);
 
   return (
     <div className="mx-auto max-w-[960px]">
