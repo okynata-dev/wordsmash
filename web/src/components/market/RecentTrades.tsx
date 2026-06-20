@@ -11,8 +11,10 @@ export function tradesKey(word: string) {
   return ["trades", word] as const;
 }
 
-function tradeKey(t: TradeRow, i: number): string {
-  return `${t.tx}-${i}`;
+// Content-based key so a prepended trade doesn't shift every row's key and re-animate
+// the whole list each poll (index-based keys did exactly that).
+function tradeKey(t: TradeRow): string {
+  return `${t.tx}-${t.trader}-${t.ts}-${t.tokenAmount}`;
 }
 
 /**
@@ -39,13 +41,13 @@ export function RecentTrades({ word, symbol }: { word: string; symbol?: string |
   useEffect(() => {
     if (!data) return;
     if (!primed.current) {
-      trades.forEach((t, i) => seen.current.add(tradeKey(t, i)));
+      trades.forEach((t) => seen.current.add(tradeKey(t)));
       primed.current = true;
       return;
     }
     const fresh = new Set<string>();
-    trades.forEach((t, i) => {
-      const k = tradeKey(t, i);
+    trades.forEach((t) => {
+      const k = tradeKey(t);
       if (!seen.current.has(k)) {
         fresh.add(k);
         seen.current.add(k);
@@ -74,8 +76,8 @@ export function RecentTrades({ word, symbol }: { word: string; symbol?: string |
       ) : (
         <Card className="divide-y divide-border overflow-hidden">
           <ul aria-live="polite" className="divide-y divide-border">
-            {trades.map((t, i) => {
-              const k = tradeKey(t, i);
+            {trades.map((t) => {
+              const k = tradeKey(t);
               return (
                 <li
                   key={k}

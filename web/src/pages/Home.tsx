@@ -144,12 +144,11 @@ export function Home() {
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           placeholder="type a word"
-          autoFocus
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
           aria-describedby="claim-status"
-          className="word-display w-full bg-transparent px-3 py-4 text-center text-4xl outline-none placeholder:text-faint sm:text-5xl"
+          className="word-display caret-fg w-full bg-transparent px-3 py-4 text-center text-4xl outline-none placeholder:text-faint focus:placeholder:text-transparent sm:text-5xl"
         />
       </Card>
 

@@ -172,8 +172,9 @@ export function Word() {
         </section>
       )}
 
-      {/* Comments */}
-      <Comments word={word} canPost={canPost} />
+      {/* Comments — pass the CANONICAL word (not the raw URL param), so the signed comment
+          message matches what the indexer rebuilds after normalizing (e.g. /word/BREAD). */}
+      <Comments word={display} canPost={canPost} />
     </div>
   );
 }

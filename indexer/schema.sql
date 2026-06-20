@@ -110,6 +110,14 @@ CREATE TABLE IF NOT EXISTS processed_logs (
 );
 
 -- ── off-chain social layer ─────────────────────────────────────────────────
+-- Replay guard: each signed social write's signature is consumed once. A captured payload
+-- can't be re-submitted (same signature). Rows self-expire with the signature TTL (pruned on use).
+CREATE TABLE IF NOT EXISTS consumed_sigs (
+  sig TEXT PRIMARY KEY,
+  ts  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_consumed_sigs_ts ON consumed_sigs(ts);
+
 CREATE TABLE IF NOT EXISTS profiles (
   address          TEXT PRIMARY KEY,
   username         TEXT UNIQUE,

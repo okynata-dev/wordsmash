@@ -79,9 +79,10 @@ export async function verifySigned(
   if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) {
     throw new AuthError("invalid timestamp");
   }
-  if (Math.abs(Date.now() - timestamp) > SIG_TTL_MS) {
-    throw new AuthError("signature expired");
-  }
+  const now = Date.now();
+  // Reject far-future timestamps tightly (small clock-skew allowance) and stale ones past the TTL.
+  if (timestamp > now + 60_000) throw new AuthError("timestamp in future");
+  if (now - timestamp > SIG_TTL_MS) throw new AuthError("signature expired");
   let recovered: string;
   try {
     recovered = await recoverMessageAddress({ message, signature });
@@ -91,6 +92,29 @@ export async function verifySigned(
   if (recovered.toLowerCase() !== address.toLowerCase()) {
     throw new AuthError("signer mismatch");
   }
+}
+
+/**
+ * Replay guard: consume a signature exactly once. A captured signed payload (same signature)
+ * cannot be re-submitted. Call AFTER verifySigned (which TTL-bounds the timestamp). Old rows are
+ * pruned opportunistically — a signature past the TTL is rejected by verifySigned anyway.
+ */
+export async function enforceFreshness(
+  db: Db,
+  signature: `0x${string}`,
+  timestamp: number,
+): Promise<void> {
+  const seen = await db
+    .prepare("SELECT 1 AS x FROM consumed_sigs WHERE sig = ?")
+    .bind(signature)
+    .first<{ x: number }>();
+  if (seen) throw new AuthError("replayed request");
+  await db
+    .prepare("INSERT OR IGNORE INTO consumed_sigs (sig, ts) VALUES (?, ?)")
+    .bind(signature, timestamp)
+    .run();
+  // prune signatures older than the TTL (they can never validate again)
+  await db.prepare("DELETE FROM consumed_sigs WHERE ts < ?").bind(Date.now() - SIG_TTL_MS).run();
 }
 
 // ── profile read ────────────────────────────────────────────────────────────
@@ -289,6 +313,7 @@ export async function updateProfile(
     timestamp,
   );
   await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
   // Username uniqueness: reject if taken by a DIFFERENT address (409).
   if (username !== null) {
@@ -326,8 +351,8 @@ export interface AvatarEnv {
 }
 
 const AVATAR_MAX_BYTES = 200 * 1024;
-const AVATAR_MIME_RE = /^data:image\/(png|jpeg|webp|svg\+xml);base64,/i;
-const AVATAR_MIME_RE_PLAIN = /^data:image\/(png|jpeg|webp|svg\+xml)[;,]/i;
+const AVATAR_MIME_RE = /^data:image\/(png|jpeg|webp);base64,/i;
+const AVATAR_MIME_RE_PLAIN = /^data:image\/(png|jpeg|webp)[;,]/i;
 
 function decodeDataUrl(dataUrl: string): Uint8Array {
   const comma = dataUrl.indexOf(",");
@@ -353,10 +378,11 @@ export async function uploadAvatar(
   const timestamp = Number(body.timestamp);
   const message = avatarUploadMessage(address, timestamp);
   await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
   const dataUrl = body.dataUrl;
   if (typeof dataUrl !== "string" || !AVATAR_MIME_RE_PLAIN.test(dataUrl)) {
-    throw new HttpError(400, "dataUrl must be data:image/(png|jpeg|webp|svg+xml)");
+    throw new HttpError(400, "dataUrl must be data:image/(png|jpeg|webp)");
   }
   // Size check on the raw string is a fast bound; the decoded bytes are smaller.
   if (dataUrl.length > AVATAR_MAX_BYTES * 2 + 1024) {
@@ -502,6 +528,7 @@ export async function postComment(
   const timestamp = Number(body.timestamp);
   const message = commentMessage(address, word, text, timestamp);
   await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
   // Resolve the token id for this word (may be null if unclaimed).
   const wordRow = await db
@@ -657,6 +684,7 @@ export async function toggleWatchlist(
   const timestamp = Number(body.timestamp);
   const message = watchlistMessage(address, tokenId, on, timestamp);
   await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
   if (on) {
     await db

@@ -291,6 +291,14 @@ export async function getWordDetail(
         .first<{ c: number }>();
       const reserve = live?.realEthReserveWei ?? "0";
       const threshold = live?.graduationThresholdWei ?? "0";
+      // Self-heal the approximate D1 reserve (which drives the discovery-board FOMO bars) with the
+      // exact on-chain value whenever a coin page is viewed, so the boards don't drift.
+      if (live?.realEthReserveWei) {
+        await db
+          .prepare("UPDATE markets SET real_eth_reserve = ? WHERE market = ?")
+          .bind(live.realEthReserveWei, m.market)
+          .run();
+      }
       market = {
         market: checksum(m.market),
         priceWei: m.last_price_wei ?? "0",

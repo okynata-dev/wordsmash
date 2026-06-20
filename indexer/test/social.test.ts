@@ -183,6 +183,20 @@ describe("comments", () => {
       }),
     ).rejects.toBeInstanceOf(AuthError);
   });
+
+  it("rejects a replayed (re-submitted) signed comment", async () => {
+    const db = await freshDb();
+    const ts = Date.now();
+    const msg = commentMessage(ADDR1, "milk", "gm", ts);
+    const payload = { body: "gm", timestamp: ts, signature: await sign(acct1, msg) };
+    // first submission succeeds...
+    await postComment(db, ADDR1, "milk", payload);
+    // ...the EXACT same signed payload cannot be replayed.
+    await expect(postComment(db, ADDR1, "milk", payload)).rejects.toBeInstanceOf(AuthError);
+    // and only one comment exists.
+    const page = await listComments(db, "milk", null);
+    expect(page.items.length).toBe(1);
+  });
 });
 
 describe("watchlist", () => {
