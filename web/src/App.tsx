@@ -9,15 +9,12 @@ import { Activity } from "./pages/Activity";
 import { Watchlist } from "./pages/Watchlist";
 import { UserRoute } from "./pages/UserRoute";
 import { AddressGate } from "./components/AddressGate";
-import { ComingSoon } from "./components/ComingSoon";
 import { ADDRESSES_READY } from "./config";
 
 export function App() {
-  // Deployed before contracts are wired: show a branded landing, not the dev
-  // "set your .env" gate. Dev keeps the gate (with the env instructions).
-  if (!ADDRESSES_READY && import.meta.env.PROD) {
-    return <ComingSoon />;
-  }
+  // The prod pre-launch landing is handled in main.tsx (before the web3
+  // providers load); here, !ADDRESSES_READY only happens in dev → show the
+  // AddressGate with env instructions.
   return (
     <Routes>
       <Route element={<Layout />}>
