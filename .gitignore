@@ -26,3 +26,7 @@ web/.vite/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Local env overrides (never commit)
+*.local
+.env*.local
