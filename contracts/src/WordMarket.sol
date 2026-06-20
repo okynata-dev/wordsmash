@@ -73,6 +73,7 @@ contract WordMarket is ERC20, ReentrancyGuard {
         Config memory cfg
     ) external {
         require(!initialized, "ALREADY_INIT");
+        require(protocolFeeRecipient_ != address(0), "ZERO_RECIPIENT");
         require(cfg.protocolBps + cfg.deedBps + cfg.liquidityBps == BPS, "BAD_SPLIT");
         require(cfg.tradeFeeBps <= 1000, "FEE_TOO_HIGH");
         require(cfg.tokenSupply > 0 && cfg.virtualEthReserve > 0, "BAD_CURVE");

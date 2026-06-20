@@ -140,14 +140,14 @@ contract DeedMarketplace is Ownable, ReentrancyGuard {
         uint256 end = offset + limit;
         if (end > total) end = total;
 
-        uint256 count;
+        uint256 count = 0;
         for (uint256 i = offset; i < end; i++) {
             if (listings[_everListedIds[i]].active) count++;
         }
         ids = new uint256[](count);
         sellers = new address[](count);
         prices = new uint256[](count);
-        uint256 j;
+        uint256 j = 0;
         for (uint256 i = offset; i < end; i++) {
             uint256 id = _everListedIds[i];
             if (listings[id].active) {
