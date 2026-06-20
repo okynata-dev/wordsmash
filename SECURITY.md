@@ -67,9 +67,13 @@ Sources for the above incidents/classes are listed at the bottom.
   holder + liquidity**, turning anti-snipe defense into owner yield.
 - **Size-based early-buy surcharge** (Meteora Rate Limiter): convex fee on large early buys to
   stop a single wallet cornering a word.
-- **Commit-reveal word claim** (ENS-style): `claimWord` is front-runnable today (watch the
-  mempool, claim the word first). Highest-ROI *new* protection — commit a hash, reveal next
-  block. This is a real named gap in the claim design.
+- **Commit-reveal word claim** (ENS-style) — **DEFERRED, by design**. In theory `claimWord`
+  is front-runnable (watch the mempool, claim the word first). But on Base the sequencer is
+  single, FCFS, with no public mempool today, so that attack is largely mitigated by the chain
+  itself — and commit-reveal would impose a two-transaction, wait-a-block flow on the core
+  "type your word, claim it" moment, which is exactly the magic we don't want to add friction
+  to. Net: not worth the UX cost now. **Revisit if/when Base exposes a public mempool or
+  decentralizes its sequencer** — then commit-reveal becomes high priority.
 - **Per-leaf buy cap during the Merkle beta**: the whitelist already gates *who* can buy, so a
   per-address cap is meaningfully sybil-resistant during closed beta.
 
