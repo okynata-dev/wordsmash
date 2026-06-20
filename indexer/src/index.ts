@@ -54,10 +54,18 @@ export interface Env {
   };
 }
 
+// Spread into every response. CORS stays "*" on purpose: these are public read
+// APIs, and the OG/avatar assets are fetched cross-origin by scrapers/other apps;
+// social WRITES are authenticated by signature recovery + replay guard, not CORS
+// (CORS is not an auth control). The security headers are safe on JSON, images,
+// redirects and HTML alike — nosniff stops MIME confusion on the served SVG/HTML.
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "X-Frame-Options": "DENY",
 };
 
 function json(data: unknown, init: ResponseInit = {}): Response {
