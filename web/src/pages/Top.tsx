@@ -18,6 +18,9 @@ type TradedWordRow = WordRow & {
   tradingVolumeWei?: string;
 };
 
+// #, Word, Volume, Mkt cap — shared by the leaderboard header and rows.
+const TOP_COLS = "grid-cols-[40px_1fr_minmax(80px,120px)_minmax(80px,120px)]";
+
 export function Top() {
   const {
     data: stats,
@@ -67,8 +70,13 @@ export function Top() {
   }, [words]);
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Leaderboard</h1>
+    <div className="mx-auto max-w-[920px]">
+      <div className="fade-up mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Top words</h1>
+        <p className="mt-2 text-sm text-muted">
+          Ranked by token-market volume across the launchpad.
+        </p>
+      </div>
 
       <div className="mb-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Mini label="Words" value={stats?.wordsClaimed} error={statsError} onRetry={() => void refetchStats()} />
@@ -97,31 +105,51 @@ export function Top() {
           </Card>
         ) : tradedError ? (
           <ErrorState message="Couldn’t load traded coins." onRetry={() => void refetchTraded()} />
+        ) : traded.length === 0 ? (
+          <Card className="px-4 py-6 text-sm text-muted">No traded coins yet.</Card>
         ) : (
-          <Card className="divide-y divide-border">
-            {traded.slice(0, 20).map((w, i) => (
-              <Link
-                key={w.tokenId}
-                to={`/word/${encodeURIComponent(w.word)}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-surface-2"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span className="w-5 text-xs text-faint tabular-nums">{i + 1}</span>
-                  <span className="word-display truncate text-lg">{w.word}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3 text-xs tabular-nums">
-                  {w.priceWei && <span className="text-muted">{ethLabel(w.priceWei)}</span>}
-                  {w.marketCapWei && (
-                    <Pill tone="positive">{ethLabel(w.marketCapWei)} mcap</Pill>
-                  )}
-                </span>
-              </Link>
-            ))}
-            {traded.length === 0 && (
-              <div className="px-4 py-6 text-sm text-muted">No traded coins yet.</div>
-            )}
+          <Card className="fade-up overflow-hidden" style={{ animationDelay: "60ms" }}>
+            <div className={`grid ${TOP_COLS} gap-3 border-b border-border px-4 py-2.5 text-[11px] uppercase tracking-wide text-faint`}>
+              <span>#</span>
+              <span>Word</span>
+              <span className="text-right">Volume</span>
+              <span className="text-right">Mkt cap</span>
+            </div>
+            {traded.slice(0, 20).map((w, i, arr) => {
+              const vol = w.tradingVolumeWei ?? w.tradeVolumeWei;
+              return (
+                <Link
+                  key={w.tokenId}
+                  to={`/word/${encodeURIComponent(w.word)}`}
+                  className={`grid ${TOP_COLS} items-center gap-3 px-4 py-3.5 transition-colors hover:bg-surface-2 ${
+                    i < arr.length - 1 ? "border-b border-border" : ""
+                  }`}
+                >
+                  <span
+                    className={`text-[15px] font-semibold tabular-nums ${
+                      i === 0 ? "text-warning" : "text-faint"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="word-display truncate text-lg">{w.word}</span>
+                    {w.graduated && <Pill tone="warning">🎓</Pill>}
+                  </span>
+                  <span className="text-right font-semibold tabular-nums">
+                    {vol ? ethLabel(vol) : "—"}
+                  </span>
+                  <span className="text-right tabular-nums text-muted">
+                    {w.marketCapWei ? ethLabel(w.marketCapWei) : "—"}
+                  </span>
+                </Link>
+              );
+            })}
           </Card>
         )}
+        <p className="mt-3 px-0.5 text-xs text-faint">
+          Volume is gameable; unique-holder and unique-trader ranking is on the roadmap.
+        </p>
       </section>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

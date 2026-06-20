@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
 
 type Variant = "primary" | "ghost" | "outline" | "danger";
 
@@ -26,12 +26,14 @@ export function Button({
 export function Card({
   children,
   className = "",
+  style,
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
-    <div className={`rounded-xl border border-border bg-surface ${className}`}>
+    <div className={`rounded-xl border border-border bg-surface ${className}`} style={style}>
       {children}
     </div>
   );

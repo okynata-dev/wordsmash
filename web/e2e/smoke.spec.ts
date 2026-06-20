@@ -12,7 +12,7 @@ test.describe("read-only pages render seeded data", () => {
 
   test("leaderboard lists the seeded words", async ({ page }) => {
     await page.goto("/top");
-    await expect(page.getByRole("heading", { name: /leaderboard/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /top words/i })).toBeVisible();
     for (const word of ["base", "genesis", "wordsmash"]) {
       await expect(page.getByText(word, { exact: true }).first()).toBeVisible();
     }

@@ -27,8 +27,12 @@ const tone: Record<ActivityRow["type"], "muted" | "positive" | "negative" | "war
   sell: "negative",
 };
 
+// Content key: a single tx can emit several activity rows for the same token
+// (e.g. two transfers to different counterparties), so tx+type+tokenId alone
+// collides. Include counterparty + ts to keep keys unique without falling back
+// to array index (which would re-animate the whole live list on each poll).
 function rowKey(a: ActivityRow): string {
-  return `${a.tx}-${a.type}-${a.tokenId}`;
+  return `${a.tx}-${a.type}-${a.tokenId}-${a.counterparty ?? ""}-${a.ts}`;
 }
 
 /**

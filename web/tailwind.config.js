@@ -20,18 +20,28 @@ export default {
         warning: "rgb(var(--c-warning) / <alpha-value>)",
       },
       fontFamily: {
+        // SF Pro leads on macOS/iOS (true San Francisco); Inter is the
+        // cross-platform fallback so non-Apple devices render as before.
         sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "SF Pro Display",
+          "SF Pro Text",
+          "Helvetica Neue",
           "Inter",
           "ui-sans-serif",
           "system-ui",
-          "-apple-system",
           "Segoe UI",
           "Roboto",
-          "Helvetica",
           "Arial",
           "sans-serif",
         ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+      },
+      // Half-step spacing used by the ported screens (p-4.5, px-5.5, h-4.5, …).
+      spacing: {
+        4.5: "1.125rem",
+        5.5: "1.375rem",
       },
       borderColor: {
         DEFAULT: "rgb(var(--c-border) / <alpha-value>)",

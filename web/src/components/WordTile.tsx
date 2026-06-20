@@ -19,6 +19,8 @@ interface WordTileProps {
   /** Claim time (unix seconds); used to flag recently-claimed words as "new". */
   claimedAt?: number | null;
   footer?: string;
+  /** Grid position; when set, staggers the fade-up mount animation. */
+  index?: number;
 }
 
 /** Words claimed within this many seconds get a "new" badge. */
@@ -34,6 +36,7 @@ export function WordTile({
   graduated,
   claimedAt,
   footer,
+  index,
 }: WordTileProps) {
   const isNew =
     typeof claimedAt === "number" && claimedAt > 0 && Date.now() / 1000 - claimedAt < NEW_WINDOW_SECONDS;
@@ -49,8 +52,12 @@ export function WordTile({
   const hasMarketCap = marketCap != null && marketCap !== "0";
 
   return (
-    <Link to={`/word/${encodeURIComponent(word)}`} className="group block">
-      <Card className="flex h-full flex-col justify-between p-5 transition duration-150 group-hover:-translate-y-0.5 group-hover:border-fg/30 group-hover:shadow-sm">
+    <Link
+      to={`/word/${encodeURIComponent(word)}`}
+      className={`group block${typeof index === "number" ? " fade-up" : ""}`}
+      style={typeof index === "number" ? { animationDelay: `${index * 50}ms` } : undefined}
+    >
+      <Card className="card-lift flex h-full flex-col justify-between p-5 group-hover:border-fg/30 group-hover:shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="word-display text-2xl sm:text-3xl">{word}</div>
           <div className="flex shrink-0 flex-col items-end gap-1">

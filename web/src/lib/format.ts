@@ -70,11 +70,13 @@ export function ethLabel(wei: string | bigint): string {
  */
 export function formatTokens(amount: string | bigint, decimals = 18): string {
   const v = toWei(amount) ?? 0n;
-  let s = formatUnits(v, decimals);
-  if (s.includes(".")) {
-    s = s.replace(/\.?0+$/, "");
-  }
-  const [int, frac] = s.split(".");
+  const s = formatUnits(v, decimals);
+  const [int, rawFrac = ""] = s.split(".");
+  // Display-only: token amounts are typically large, so cap fractional digits by
+  // magnitude (none once we're into the thousands) instead of dumping all 18.
+  const intDigits = int.replace(/^0$/, "").length;
+  const maxFrac = intDigits >= 4 ? 0 : 4;
+  const frac = rawFrac.slice(0, maxFrac).replace(/0+$/, "");
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return frac ? `${grouped}.${frac}` : grouped;
 }

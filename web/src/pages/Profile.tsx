@@ -35,7 +35,7 @@ export function Profile() {
   const displayName = meta?.username ? `@${meta.username}` : shortAddr(address);
 
   return (
-    <div>
+    <div className="mx-auto max-w-[960px]">
       {isLoading ? (
         <ProfileSkeleton />
       ) : isError ? (
@@ -47,7 +47,7 @@ export function Profile() {
               <EditProfile address={address} meta={meta} onClose={() => setEditing(false)} />
             </div>
           ) : (
-            <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <Card className="fade-up mb-6 flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:justify-between sm:p-7">
               <div className="flex min-w-0 items-start gap-4">
                 <Avatar address={address} size={72} />
                 <div className="min-w-0">
@@ -109,7 +109,7 @@ export function Profile() {
                   <ShareButton word={data.owned[0].word} label="Share" variant="ghost" />
                 )}
               </div>
-            </header>
+            </Card>
           )}
 
           <div className="mb-4 flex items-center gap-1 border-b border-border text-sm">
@@ -129,8 +129,13 @@ export function Profile() {
               <Empty>No words yet.</Empty>
             ) : (
               <Grid>
-                {data.owned.map((w) => (
-                  <WordTile key={w.tokenId} word={w.word} footer={`claimed ${timeAgo(w.claimedAt)}`} />
+                {data.owned.map((w, i) => (
+                  <WordTile
+                    key={w.tokenId}
+                    index={i}
+                    word={w.word}
+                    footer={`claimed ${timeAgo(w.claimedAt)}`}
+                  />
                 ))}
               </Grid>
             ))}
@@ -140,8 +145,8 @@ export function Profile() {
               <Empty>No active listings.</Empty>
             ) : (
               <Grid>
-                {data.listings.map((l) => (
-                  <WordTile key={l.tokenId} word={l.word} price={l.price} />
+                {data.listings.map((l, i) => (
+                  <WordTile key={l.tokenId} index={i} word={l.word} price={l.price} />
                 ))}
               </Grid>
             ))}

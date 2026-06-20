@@ -126,141 +126,137 @@ export function Home() {
     );
   }
 
-  return (
-    <div className="mx-auto max-w-2xl">
-      <div className="py-8 text-center sm:py-14">
-        <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-          Claim a word.
-        </h1>
-        <p className="mt-3 text-muted">Only one will ever exist.</p>
-      </div>
-
-      <Card className="p-2 sm:p-3">
-        <label htmlFor="claim-word-input" className="sr-only">
-          Word to claim
-        </label>
-        <input
-          id="claim-word-input"
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          placeholder="type a word"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          aria-describedby="claim-status"
-          className="word-display caret-fg w-full bg-transparent px-3 py-4 text-center text-4xl outline-none placeholder:text-faint focus:placeholder:text-transparent sm:text-5xl"
-        />
-      </Card>
-
-      <div
-        id="claim-status"
-        role="status"
-        aria-live="polite"
-        className="mt-3 flex min-h-[2.5rem] items-center justify-center"
+  const claimAction = (
+    <WhitelistGate compact>
+      <Button
+        className="shrink-0"
+        onClick={doClaim}
+        disabled={
+          state.kind !== "available" ||
+          isPending ||
+          confirming ||
+          syncing ||
+          outOfClaims ||
+          claimFee === undefined /* M3/M4: never enable a claim before the fee is known */
+        }
       >
-        <StatusLine state={state} />
-      </div>
-
-      <div className="mt-2 space-y-3">
-        {!isConnected ? (
-          <div className="flex justify-center">
-            <WalletButton />
-          </div>
-        ) : wrongNetwork ? (
-          <div className="flex justify-center">
-            <WalletButton />
-          </div>
+        {isPending || confirming || syncing ? (
+          <>
+            <Spinner /> {syncing ? "Syncing…" : "Claiming…"}
+          </>
+        ) : claimFee !== undefined ? (
+          `Claim${(claimFee as bigint) > 0n ? ` · ${ethLabel(claimFee as bigint)}` : " (free)"}`
         ) : (
-          <WhitelistGate>
-            <div className="flex flex-col items-center gap-2">
-              <Button
-                className="w-full sm:w-auto"
-                onClick={doClaim}
-                disabled={
-                  state.kind !== "available" ||
-                  isPending ||
-                  confirming ||
-                  syncing ||
-                  outOfClaims ||
-                  claimFee === undefined /* M3/M4: never enable a claim before the fee is known */
-                }
-              >
-                {isPending || confirming || syncing ? (
-                  <>
-                    <Spinner /> {syncing ? "Syncing…" : "Claiming…"}
-                  </>
-                ) : claimFee !== undefined ? (
-                  `Claim${(claimFee as bigint) > 0n ? ` · ${ethLabel(claimFee as bigint)}` : " (free)"}`
-                ) : (
-                  <>
-                    <Spinner /> Loading fee…
-                  </>
-                )}
-              </Button>
-              {outOfClaims && (
-                <p className="text-xs text-warning">
-                  You&apos;ve hit the claim limit for this wallet.
-                </p>
-              )}
-            </div>
-          </WhitelistGate>
+          <>
+            <Spinner /> Loading fee…
+          </>
         )}
-      </div>
+      </Button>
+    </WhitelistGate>
+  );
 
-      {/* Anti-bot limit + remaining claims */}
-      {isConnected && (
-        <p className="mt-4 text-center text-xs text-muted">
-          {remainingNum !== undefined && maxClaims !== undefined
-            ? `${remainingNum} of ${Number(maxClaims)} claims remaining for this wallet`
-            : "Claims are limited per wallet to keep things fair."}
+  return (
+    <div>
+      {/* Hero / claim */}
+      <section className="fade-up mx-auto mb-11 max-w-[680px] text-center">
+        <h1 className="text-balance text-3xl font-semibold leading-[1.05] tracking-tight sm:text-[44px]">
+          Claim a word.
+          <br />
+          Own it forever.
+        </h1>
+        <p className="mx-auto mt-4 max-w-[52ch] text-muted">
+          Every word can be claimed only once, ever. Claiming mints a 1-of-1 deed —
+          global uniqueness enforced on-chain. No images, no descriptions. Just the word.
         </p>
-      )}
 
-      {/* Live counters — animate up as /stats refetches. */}
-      <div className="mt-12 grid grid-cols-3 gap-3 sm:gap-4">
-        <Stat
-          label="Words claimed"
-          value={stats?.wordsClaimed}
-          error={statsError}
-          onRetry={() => void refetchStats()}
-        />
-        <Stat
-          label="Unique owners"
-          value={stats?.uniqueOwners}
-          error={statsError}
-          onRetry={() => void refetchStats()}
-        />
-        <Stat
-          label="Total volume"
-          ethWei={stats?.totalVolumeWei}
-          error={statsError}
-          onRetry={() => void refetchStats()}
-        />
+        <div className="mt-7 flex items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm">
+          <label htmlFor="claim-word-input" className="sr-only">
+            Word to claim
+          </label>
+          <input
+            id="claim-word-input"
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="type a word"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-describedby="claim-status"
+            className="word-display caret-fg min-w-0 flex-1 bg-transparent text-xl outline-none placeholder:text-faint focus:placeholder:text-transparent sm:text-2xl"
+          />
+          {!isConnected || wrongNetwork ? <WalletButton /> : claimAction}
+        </div>
+
+        <div
+          id="claim-status"
+          role="status"
+          aria-live="polite"
+          className="mt-2.5 flex min-h-[1.75rem] items-center justify-center"
+        >
+          <StatusLine state={state} />
+        </div>
+
+        {isConnected && outOfClaims && (
+          <p className="mt-1 text-xs text-warning">
+            You&apos;ve hit the claim limit for this wallet.
+          </p>
+        )}
+        {isConnected && (
+          <p className="mt-1 text-xs text-faint">
+            {remainingNum !== undefined && maxClaims !== undefined
+              ? `${remainingNum} of ${Number(maxClaims)} claims remaining for this wallet`
+              : "Claims are limited per wallet to keep things fair."}
+          </p>
+        )}
+        <p className="mt-4 text-xs text-faint">
+          Closed beta · whitelisted wallets · testnet only, not an investment product
+        </p>
+      </section>
+
+      {/* Browse: discovery grid + sticky live sidebar */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0">
+          <DiscoveryBoard />
+        </div>
+
+        <aside className="flex flex-col gap-5 lg:sticky lg:top-[84px]">
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-medium text-muted">
+                Live activity <LiveBadge />
+              </h2>
+            </div>
+            <ActivityFeed limit={6} compact live />
+            <Link
+              to="/activity"
+              className="mt-2.5 block text-[13px] text-muted hover:text-fg"
+            >
+              View all activity →
+            </Link>
+          </div>
+
+          <Card className="p-4">
+            <SideStat
+              label="Words claimed"
+              value={stats?.wordsClaimed}
+              error={statsError}
+              onRetry={() => void refetchStats()}
+            />
+            <SideStat
+              label="Unique owners"
+              value={stats?.uniqueOwners}
+              error={statsError}
+              onRetry={() => void refetchStats()}
+            />
+            <SideStat
+              label="Total volume"
+              ethWei={stats?.totalVolumeWei}
+              error={statsError}
+              onRetry={() => void refetchStats()}
+            />
+          </Card>
+        </aside>
       </div>
-
-      {/* Live activity ticker */}
-      <section className="mt-12">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-muted">
-            Live <LiveBadge />
-          </h2>
-          <Link to="/activity" className="text-xs text-muted hover:text-fg">
-            View all →
-          </Link>
-        </div>
-        <ActivityFeed limit={6} compact live />
-      </section>
-
-      {/* Discovery board — what's hot right now. */}
-      <section className="mt-12">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted">Discover</h2>
-          <Link to="/top" className="text-xs text-muted hover:text-fg">
-            Leaderboard →
-          </Link>
-        </div>
-        <DiscoveryBoard />
-      </section>
     </div>
   );
 }
@@ -284,7 +280,12 @@ function StatusLine({ state }: { state: State }) {
   }
 }
 
-function Stat({
+/**
+ * Compact sidebar stat row (label left, live value right). Count-ups numeric
+ * stats for the live feel; for ETH it tracks the trimmed label's numeric value
+ * but rests on the exact ethLabel string so we never show a lossy float.
+ */
+function SideStat({
   label,
   value,
   ethWei,
@@ -293,17 +294,10 @@ function Stat({
 }: {
   label: string;
   value?: number;
-  /**
-   * When set, render an ETH amount: count-up the numeric portion for the live
-   * feel, but snap to the exact ethLabel string (correct wei trimming) once the
-   * animation settles, so we never show a lossy float as the resting value.
-   */
   ethWei?: string;
   error?: boolean;
   onRetry?: () => void;
 }) {
-  // For ETH stats, derive a numeric target from the trimmed label so the count-up
-  // tracks the value the user will actually see (no Number(BigInt) on raw wei).
   const ethTarget =
     ethWei !== undefined ? Number(formatEthAmount(ethWei).replace(/,/g, "")) : undefined;
   const animated = useCountUp(ethWei !== undefined ? ethTarget : value);
@@ -312,7 +306,8 @@ function Stat({
   if (error) {
     display = "";
   } else if (ethWei !== undefined) {
-    display = ethTarget === undefined ? "—" : `${(animated ?? ethTarget).toFixed(ethTarget >= 1 ? 2 : 4)} ETH`;
+    display =
+      ethTarget === undefined ? "—" : `${(animated ?? ethTarget).toFixed(ethTarget >= 1 ? 2 : 4)} ETH`;
   } else if (value === undefined || animated === null) {
     display = "—";
   } else {
@@ -320,17 +315,15 @@ function Stat({
   }
 
   return (
-    <Card className="p-5 text-center">
-      <div className="text-2xl font-semibold tabular-nums">
-        {error ? (
-          <button onClick={onRetry} className="text-base font-normal text-muted underline">
-            retry
-          </button>
-        ) : (
-          display
-        )}
-      </div>
-      <div className="mt-1 text-xs text-muted">{label}</div>
-    </Card>
+    <div className="flex items-center justify-between py-1.5 text-[13px]">
+      <span className="text-muted">{label}</span>
+      {error ? (
+        <button onClick={onRetry} className="font-medium text-muted underline">
+          retry
+        </button>
+      ) : (
+        <span className="font-semibold tabular-nums">{display}</span>
+      )}
+    </div>
   );
 }

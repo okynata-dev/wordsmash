@@ -71,7 +71,7 @@ export function Layout() {
         ref={menuRef}
         className="sticky top-0 z-30 border-b border-border bg-bg/80 backdrop-blur"
       >
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-4 py-3 sm:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <span className="text-lg font-semibold tracking-tight">wordsmash</span>
             <span className="hidden rounded bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted lg:inline">
@@ -143,7 +143,7 @@ export function Layout() {
         )}
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
+      <main className="mx-auto w-full max-w-[1120px] flex-1 px-4 py-8 sm:px-6">
         {/* Route-level recoverable boundary: keyed on the path so navigating away clears a crash. */}
         <ErrorBoundary key={location.pathname}>
           <Outlet />
@@ -151,7 +151,7 @@ export function Layout() {
       </main>
 
       <footer className="border-t border-border">
-        <div className="mx-auto max-w-5xl px-4 py-6 text-xs text-faint sm:px-6">
+        <div className="mx-auto max-w-[1120px] px-4 py-6 text-xs text-faint sm:px-6">
           wordsmash — one word, one owner. Claim what only one will ever own.
         </div>
       </footer>

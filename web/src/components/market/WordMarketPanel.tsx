@@ -75,96 +75,138 @@ export function WordMarketPanel({
   }
 
   return (
-    <section className="space-y-4" aria-label="Token market">
-      {/* Price header */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-muted">
-              <span>Price</span>
-              {symbol && <Pill>{symbol}</Pill>}
-              {graduated && <Pill tone="warning">graduated 🎓</Pill>}
-              {typeof traders === "number" && (
-                <span className="tabular-nums text-faint">
-                  {traders.toLocaleString()} {traders === 1 ? "trader" : "traders"}
-                </span>
-              )}
+    <section
+      className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"
+      aria-label="Token market"
+    >
+      {/* LEFT: price, chart, trades */}
+      <div className="flex min-w-0 flex-col gap-4">
+        {/* Price header */}
+        <Card className="fade-up p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span>Price</span>
+                {symbol && <Pill>{symbol}</Pill>}
+                {graduated && <Pill tone="warning">graduated 🎓</Pill>}
+                {typeof traders === "number" && (
+                  <span className="tabular-nums text-faint">
+                    {traders.toLocaleString()} {traders === 1 ? "trader" : "traders"}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-3xl font-semibold tabular-nums sm:text-4xl">
+                {priceWei !== undefined ? ethLabel(priceWei) : <Skeleton className="h-9 w-40" />}
+              </div>
             </div>
-            <div className="mt-1 text-3xl font-semibold tabular-nums sm:text-4xl">
-              {priceWei !== undefined ? ethLabel(priceWei) : <Skeleton className="h-9 w-40" />}
+            <div className="flex gap-6 text-right">
+              <Metric
+                label="Market cap"
+                value={marketCapWei !== undefined ? ethLabel(marketCapWei) : undefined}
+              />
+              <Metric
+                label="Volume"
+                value={volumeWei !== undefined ? ethLabel(volumeWei) : undefined}
+              />
             </div>
           </div>
-          <div className="flex gap-6 text-right">
-            <Metric
-              label="Market cap"
-              value={marketCapWei !== undefined ? ethLabel(marketCapWei) : undefined}
-            />
-            <Metric
-              label="Volume"
-              value={volumeWei !== undefined ? ethLabel(volumeWei) : undefined}
-            />
-          </div>
-        </div>
 
-        {/* Graduation progress — the FOMO bar. */}
-        <GraduationBar
-          pct={progressPct}
-          graduated={graduated}
-          realEthReserveWei={info.realEthReserveWei}
-          graduationThresholdWei={info.graduationThresholdWei}
-        />
-      </Card>
-
-      {/* Price chart */}
-      {chart.isLoading ? (
-        <Skeleton className="h-[120px] w-full rounded-xl" />
-      ) : (
-        <PriceChart points={chart.data ?? []} />
-      )}
-
-      {/* Buy / Sell box. After graduation the contract freezes buys but keeps
-          sell() open, so we keep the Sell tab usable and only freeze Buy. */}
-      {!isConnected || wrongNetwork ? (
-        <Card className="flex flex-col items-center gap-3 p-5 text-sm text-muted">
-          <span>Connect your wallet to trade {symbol ? `$${symbol}` : "this coin"}.</span>
-          <WalletButton />
-        </Card>
-      ) : (
-        <WhitelistGate>
-          <TradeBox
-            market={marketAddr}
-            symbol={symbol}
-            word={word}
-            buyFrozen={graduated}
-            onTraded={onChanged}
+          {/* Graduation progress — the FOMO bar. */}
+          <GraduationBar
+            pct={progressPct}
+            graduated={graduated}
+            realEthReserveWei={info.realEthReserveWei}
+            graduationThresholdWei={info.graduationThresholdWei}
           />
-        </WhitelistGate>
-      )}
-
-      {/* Your position */}
-      {isConnected && (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div>
-            <p className="text-xs text-muted">Your position</p>
-            <p className="text-lg font-semibold tabular-nums">{tokenLabel(balance, symbol)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted">Value</p>
-            <p className="text-sm font-medium tabular-nums">
-              {priceWei !== undefined ? ethLabel((balance * priceWei) / 10n ** 18n) : "—"}
-            </p>
-          </div>
         </Card>
-      )}
 
-      {/* Deed-holder fees (cash-flow hook) */}
-      {isDeedOwner && (
-        <DeedFees market={marketAddr} word={word} feesWei={deedFeesWei} onClaimed={onChanged} />
-      )}
+        {/* Price chart */}
+        {chart.isLoading ? (
+          <Skeleton className="h-[120px] w-full rounded-xl" />
+        ) : (
+          <Card className="fade-up p-3" style={{ animationDelay: "60ms" }}>
+            <PriceChart points={chart.data ?? []} />
+          </Card>
+        )}
 
-      {/* Recent trades */}
-      <RecentTrades word={word} symbol={symbol} />
+        {/* Recent trades */}
+        <RecentTrades word={word} symbol={symbol} />
+      </div>
+
+      {/* RIGHT: sticky trade rail */}
+      <div className="flex flex-col gap-4 lg:sticky lg:top-[84px]">
+        {/* Buy / Sell box. After graduation the contract freezes buys but keeps
+            sell() open, so we keep the Sell tab usable and only freeze Buy. */}
+        {!isConnected || wrongNetwork ? (
+          <Card className="fade-up flex flex-col items-center gap-3 p-5 text-sm text-muted">
+            <span>Connect your wallet to trade {symbol ? `$${symbol}` : "this coin"}.</span>
+            <WalletButton />
+          </Card>
+        ) : (
+          <WhitelistGate>
+            <TradeBox
+              market={marketAddr}
+              symbol={symbol}
+              word={word}
+              buyFrozen={graduated}
+              onTraded={onChanged}
+            />
+          </WhitelistGate>
+        )}
+
+        {/* Your position */}
+        {isConnected && (
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-xs text-muted">Your position</p>
+              <p className="text-lg font-semibold tabular-nums">{tokenLabel(balance, symbol)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted">Value</p>
+              <p className="text-sm font-medium tabular-nums">
+                {priceWei !== undefined ? ethLabel((balance * priceWei) / 10n ** 18n) : "—"}
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {/* Deed-holder fees (cash-flow hook) */}
+        {isDeedOwner && (
+          <DeedFees market={marketAddr} word={word} feesWei={deedFeesWei} onClaimed={onChanged} />
+        )}
+
+        {/* About this market — real indexed/live fields. */}
+        <Card className="p-4">
+          <h3 className="mb-2 text-sm font-medium text-muted">About this market</h3>
+          <AboutRow label="Symbol" value={symbol ? `$${symbol}` : "—"} />
+          {typeof traders === "number" && (
+            <AboutRow label="Traders" value={traders.toLocaleString()} />
+          )}
+          <AboutRow
+            label="Volume"
+            value={volumeWei !== undefined ? ethLabel(volumeWei) : "—"}
+          />
+          <AboutRow
+            label="In bonding curve"
+            value={`${ethLabel(info.realEthReserveWei)} / ${ethLabel(info.graduationThresholdWei)}`}
+          />
+          <AboutRow label="Status" value={graduated ? "Graduated 🎓" : "Live"} last />
+        </Card>
+      </div>
     </section>
+  );
+}
+
+function AboutRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-between py-2.5 text-[13px] ${
+        last ? "" : "border-b border-border"
+      }`}
+    >
+      <span className="text-muted">{label}</span>
+      <span className="font-medium tabular-nums">{value}</span>
+    </div>
   );
 }
 

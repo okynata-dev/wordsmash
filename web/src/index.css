@@ -168,3 +168,81 @@ body {
     display: none;
   }
 }
+
+/*
+  Ported-screen motion (Variant A). Same token-driven, GPU-cheap, reduced-motion
+  gated pattern as the keyframes above.
+*/
+
+/* Mount fade-up — page sections and grid tiles (stagger via inline delay). */
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Card hover lift — pair with `transition` utility on the element. */
+.card-lift {
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  border-color: rgb(var(--c-fg) / 0.28);
+  box-shadow: 0 6px 20px -8px rgb(var(--c-fg) / 0.12);
+}
+
+/* Price flash — toggle .price-up / .price-down for ~1s when a quote changes. */
+@keyframes price-up {
+  0% {
+    color: rgb(var(--c-positive));
+  }
+  100% {
+    color: inherit;
+  }
+}
+@keyframes price-down {
+  0% {
+    color: rgb(var(--c-negative));
+  }
+  100% {
+    color: inherit;
+  }
+}
+.price-up {
+  animation: price-up 1s ease-out;
+}
+.price-down {
+  animation: price-down 1s ease-out;
+}
+
+/* Animated graduation fill — width tweens smoothly when the value updates. */
+.grad-fill {
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .price-up,
+  .price-down {
+    animation: none;
+  }
+  .card-lift,
+  .card-lift:hover {
+    transform: none;
+    transition: none;
+  }
+  .grad-fill {
+    transition: none;
+  }
+}

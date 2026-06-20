@@ -58,7 +58,7 @@ export function DiscoveryBoard() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="p-5">
               <Skeleton className="h-8 w-32" />
@@ -71,10 +71,11 @@ export function DiscoveryBoard() {
       ) : words.length === 0 ? (
         <Card className="p-6 text-sm text-muted">Nothing here yet.</Card>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {words.map((w) => (
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          {words.map((w, i) => (
             <WordTile
               key={w.tokenId}
+              index={i}
               word={w.word}
               owner={w.owner}
               tokenPrice={w.priceWei}

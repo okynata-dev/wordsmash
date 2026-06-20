@@ -20,7 +20,6 @@ import {
 import { Button, Card, Pill, Spinner, ErrorState } from "../components/ui";
 import { ShareButton } from "../components/ShareButton";
 import { WhitelistGate } from "../components/WhitelistGate";
-import { WalletButton } from "../components/WalletButton";
 import { WatchButton } from "../components/WatchButton";
 import { Comments } from "../components/Comments";
 import { WordMarketPanel } from "../components/market/WordMarketPanel";
@@ -66,32 +65,57 @@ export function Word() {
   const canPost = isConnected && !wrongNetwork && (whitelistEnabled === false || allowed === true);
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="py-10 text-center sm:py-16">
-        <h1 className="word-display text-5xl sm:text-7xl">{display}</h1>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+    <div>
+      <Link
+        to="/market"
+        className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        Market
+      </Link>
+
+      {/* Hero */}
+      <Card className="fade-up p-6 sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="word-display text-5xl leading-none sm:text-6xl">{display}</h1>
+            <p className="mt-3.5 max-w-[46ch] text-sm text-muted">
+              The only <span className="font-medium text-fg">{display}</span> that will ever
+              exist on-chain — claimed once, owned forever.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {tokenId !== null && <WatchButton tokenId={tokenId.toString()} />}
+            <ShareButton word={display} variant="ghost" />
+          </div>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-sm">
           {isLoading ? (
             <Pill>loading…</Pill>
           ) : owner ? (
-            <span className="flex items-center gap-1 text-sm text-muted">
-              owned by <UserBadge address={owner} size={22} />
+            <span className="flex items-center gap-2 text-muted">
+              <span className="text-xs text-faint">deed holder</span>
+              <UserBadge address={owner} size={22} />
             </span>
           ) : isError ? (
             <Pill tone="warning">status unavailable</Pill>
           ) : (
             <Pill tone="positive">unclaimed</Pill>
           )}
-          {tokenId !== null && <WatchButton tokenId={tokenId.toString()} />}
-          <ShareButton word={display} variant="ghost" />
+          <Pill>1 of 1 · forever</Pill>
         </div>
-      </div>
+      </Card>
 
       {isError && !detail ? (
-        <ErrorState message="Couldn’t load this word." onRetry={() => void refetch()} />
+        <div className="mt-5">
+          <ErrorState message="Couldn’t load this word." onRetry={() => void refetch()} />
+        </div>
       ) : null}
 
       {!owner && !isLoading && !isError && (
-        <Card className="p-5 text-center text-sm text-muted">
+        <Card className="mt-5 p-5 text-center text-sm text-muted">
           No one owns “{display}” yet.{" "}
           <Link to="/" className="text-fg underline">
             Claim it
@@ -100,53 +124,54 @@ export function Word() {
         </Card>
       )}
 
-      {/* Action area */}
-      {owner && tokenId !== null && (
-        <div className="space-y-4">
-          {!isConnected || wrongNetwork ? (
-            <Card className="flex flex-col items-center gap-3 p-5 text-sm text-muted">
-              <span>Connect your wallet to trade this word.</span>
-              <WalletButton />
-            </Card>
-          ) : (
-            <WhitelistGate>
-              {isOwner ? (
-                <OwnerControls
-                  tokenId={tokenId}
-                  listed={Boolean(listing?.active)}
-                  word={word}
-                  onDone={refetch}
-                />
-              ) : listing?.active ? (
-                <BuyControl
-                  tokenId={tokenId}
-                  price={listing.price}
-                  seller={listing.seller}
-                  word={word}
-                  onDone={refetch}
-                />
-              ) : (
-                <Card className="p-5 text-center text-sm text-muted">
-                  Not currently for sale.
-                </Card>
-              )}
-            </WhitelistGate>
-          )}
-          {listing?.active && (
-            <p className="flex flex-wrap items-center justify-center gap-1 text-center text-sm text-muted">
-              Listed for <span className="font-medium text-fg">{ethLabel(listing.price)}</span> by{" "}
-              <UserBadge address={listing.seller} size={20} />
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Token market (v2): coin/trading view for the claimed word. */}
+      {/* Token market (v2): the coin/trading view leads — it's the main event. */}
       {owner && detail?.market && (
-        <div className="mt-8">
+        <div className="mt-5">
           <WordMarketPanel word={word} info={detail.market} onChanged={refetch} />
         </div>
       )}
+
+      {/* Deed marketplace — buy/sell the 1-of-1 word deed (the NFT itself). */}
+      {owner &&
+        tokenId !== null &&
+        ((isConnected && !wrongNetwork) || listing?.active) && (
+          <section className="mt-12 max-w-xl">
+            <h2 className="mb-3 text-sm font-medium text-muted">Deed marketplace</h2>
+            <div className="space-y-4">
+              {isConnected && !wrongNetwork && (
+                <WhitelistGate>
+                  {isOwner ? (
+                    <OwnerControls
+                      tokenId={tokenId}
+                      listed={Boolean(listing?.active)}
+                      word={word}
+                      onDone={refetch}
+                    />
+                  ) : listing?.active ? (
+                    <BuyControl
+                      tokenId={tokenId}
+                      price={listing.price}
+                      seller={listing.seller}
+                      word={word}
+                      onDone={refetch}
+                    />
+                  ) : (
+                    <Card className="p-5 text-center text-sm text-muted">
+                      Not currently for sale.
+                    </Card>
+                  )}
+                </WhitelistGate>
+              )}
+              {listing?.active && (
+                <p className="flex flex-wrap items-center gap-1 text-sm text-muted">
+                  Listed for{" "}
+                  <span className="font-medium text-fg">{ethLabel(listing.price)}</span> by{" "}
+                  <UserBadge address={listing.seller} size={20} />
+                </p>
+              )}
+            </div>
+          </section>
+        )}
 
       {/* Ownership history */}
       {detail && detail.history.length > 0 && (
