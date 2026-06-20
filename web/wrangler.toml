@@ -1,0 +1,10 @@
+# Cloudflare Pages config — binds the waitlist D1 to the Pages Functions in
+# ./functions (same-origin /api/* endpoints; no separate Worker, no CORS).
+name = "wordsmash"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "WAITLIST_DB"
+database_name = "wordsmash-waitlist"
+database_id = "2e137091-af28-4edd-a185-30086d29301a"
