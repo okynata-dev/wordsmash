@@ -164,10 +164,7 @@ export function Home() {
           <br />
           Own it forever.
         </h1>
-        <p className="mx-auto mt-4 max-w-[52ch] text-muted">
-          Every word can be claimed only once, ever. Claiming mints a 1-of-1 deed —
-          global uniqueness enforced on-chain. No images, no descriptions. Just the word.
-        </p>
+        <p className="mx-auto mt-4 text-muted">One word, one owner. Forever.</p>
 
         <div className="mt-7 flex items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm">
           <label htmlFor="claim-word-input" className="sr-only">
@@ -225,9 +222,6 @@ export function Home() {
               : "Claims are limited per wallet to keep things fair."}
           </p>
         )}
-        <p className="mt-4 text-xs text-faint">
-          Closed beta · whitelisted wallets · testnet only, not an investment product
-        </p>
       </section>
 
       {/* Browse: discovery grid + sticky live sidebar */}

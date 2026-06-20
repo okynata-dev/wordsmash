@@ -22,7 +22,7 @@ export function Watchlist() {
         </h1>
         <p className="mt-1.5 text-sm text-muted">
           {isConnected && count > 0
-            ? `${count} ${count === 1 ? "word" : "words"} you’re tracking — updates live as they trade.`
+            ? `${count} ${count === 1 ? "word" : "words"} you’re tracking. Updates live as they trade.`
             : "Words you’re keeping an eye on. Star a word from its page to add it."}
         </p>
       </header>

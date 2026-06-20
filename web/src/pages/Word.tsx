@@ -84,8 +84,7 @@ export function Word() {
           <div className="min-w-0">
             <h1 className="word-display text-5xl leading-none sm:text-6xl">{display}</h1>
             <p className="mt-3.5 max-w-[46ch] text-sm text-muted">
-              The only <span className="font-medium text-fg">{display}</span> that will ever
-              exist on-chain — claimed once, owned forever.
+              The only <span className="font-medium text-fg">{display}</span> there will ever be.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

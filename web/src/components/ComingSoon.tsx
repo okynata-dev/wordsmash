@@ -1,59 +1,131 @@
+import { useState } from "react";
+
+const HOST = "wordsmash.pages.dev";
+
+/** Same normalization as the claim flow: a–z0–9, max 30. */
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
+}
+
 /**
- * Public landing shown on the deployed site before contract addresses are wired
- * (production only — dev still gets the AddressGate with env instructions). Keeps
- * a real *.pages.dev URL looking intentional: brand, value prop, "launching soon"
- * — no nav to gated pages, no indexer calls.
+ * Public landing shown on the deployed site before contracts are wired (prod only;
+ * dev keeps the AddressGate). The point isn't to explain the mechanics — it's to
+ * make you want a word: type one and it becomes yours, then share it. Zero web3,
+ * zero backend, zero fine print.
  */
 export function ComingSoon() {
+  const [raw, setRaw] = useState("");
+  const [claimed, setClaimed] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const word = normalize(raw);
+
+  function share() {
+    const text = word
+      ? `I’m claiming the word “${word}”.`
+      : `Claim a word. Own it forever.`;
+    const url = `https://${HOST}`;
+    const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+    if (nav.share) {
+      nav.share({ text, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(`${text} ${url}`).then(
+        () => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1600);
+        },
+        () => {},
+      );
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-bg text-fg">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-[1120px] items-center gap-2 px-6 py-4">
-          <span className="text-lg font-semibold tracking-tight">wordsmash</span>
-          <span className="rounded-[5px] bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-            Base
-          </span>
-        </div>
+      <header className="px-6 py-5">
+        <span className="text-lg font-semibold tracking-tight">wordsmash</span>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[680px] flex-1 flex-col items-center justify-center px-6 text-center">
-        <span className="fade-up mb-6 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-[13px] font-medium text-muted">
-          <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-positive" />
-          Launching soon on Base
-        </span>
-
-        <h1 className="fade-up text-balance text-4xl font-semibold leading-[1.05] tracking-tight sm:text-[52px]">
-          Claim a word.
+      <main className="mx-auto flex w-full max-w-[620px] flex-1 flex-col items-center justify-center px-6 pb-24 text-center">
+        <h1 className="fade-up text-balance text-4xl font-semibold leading-[1.04] tracking-tight sm:text-[56px]">
+          Claim{" "}
+          {word ? (
+            <span className="break-all text-accent">“{word}”</span>
+          ) : (
+            "a word"
+          )}
+          .
           <br />
           Own it forever.
         </h1>
 
-        <p className="fade-up mx-auto mt-5 max-w-[52ch] text-muted" style={{ animationDelay: "60ms" }}>
-          Every word can be claimed only once, ever. Claiming mints a 1-of-1 deed —
-          global uniqueness enforced on-chain. No images, no descriptions. Just the word.
-        </p>
+        {!claimed ? (
+          <>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (word) setClaimed(true);
+              }}
+              className="fade-up mt-9 flex w-full max-w-[440px] items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 shadow-sm"
+              style={{ animationDelay: "60ms" }}
+            >
+              <label htmlFor="cs-word" className="sr-only">
+                Your word
+              </label>
+              <input
+                id="cs-word"
+                value={raw}
+                onChange={(e) => setRaw(e.target.value)}
+                placeholder="your word"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+                className="word-display caret-fg min-w-0 flex-1 bg-transparent text-left text-xl outline-none placeholder:text-faint sm:text-2xl"
+              />
+              <button
+                type="submit"
+                disabled={!word}
+                className="shrink-0 rounded-lg bg-accent px-5 py-2.5 text-[15px] font-medium text-accent-fg transition hover:opacity-90 disabled:opacity-40"
+              >
+                Claim
+              </button>
+            </form>
 
-        {/* Decorative claim row — a taste of the product, intentionally inert here. */}
-        <div
-          className="fade-up mt-8 flex w-full max-w-[460px] items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm"
-          style={{ animationDelay: "120ms" }}
-          aria-hidden
-        >
-          <span className="word-display min-w-0 flex-1 text-xl text-faint sm:text-2xl">your word</span>
-          <span className="shrink-0 rounded-lg bg-accent px-4 py-2 text-[15px] font-medium text-accent-fg opacity-60">
-            Claim
-          </span>
-        </div>
-
-        <p className="fade-up mt-5 text-xs text-faint" style={{ animationDelay: "160ms" }}>
-          Closed beta · whitelisted wallets · not an investment product
-        </p>
+            <p
+              className="fade-up mt-4 text-sm text-muted"
+              style={{ animationDelay: "100ms" }}
+            >
+              {word ? `Only one “${word}” will ever exist.` : "One word, one owner."}
+            </p>
+          </>
+        ) : (
+          <div className="fade-up mt-9 flex w-full max-w-[440px] flex-col items-center gap-4">
+            <p className="text-base text-muted">
+              <span className="font-medium text-fg">“{word}”</span> is yours to claim
+              the moment wordsmash opens.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={share}
+                className="rounded-lg bg-accent px-5 py-2.5 text-[15px] font-medium text-accent-fg transition hover:opacity-90"
+              >
+                {copied ? "Copied" : "Share it"}
+              </button>
+              <button
+                onClick={() => {
+                  setClaimed(false);
+                  setRaw("");
+                }}
+                className="text-sm text-muted transition hover:text-fg"
+              >
+                try another
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto max-w-[1120px] px-6 py-6 text-xs text-faint">
-          wordsmash — one word, one owner. Claim what only one will ever own.
-        </div>
+      <footer className="px-6 py-6 text-center text-xs text-faint">
+        Launching on Base
       </footer>
     </div>
   );

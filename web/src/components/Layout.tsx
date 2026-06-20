@@ -152,7 +152,7 @@ export function Layout() {
 
       <footer className="border-t border-border">
         <div className="mx-auto max-w-[1120px] px-4 py-6 text-xs text-faint sm:px-6">
-          wordsmash — one word, one owner. Claim what only one will ever own.
+          wordsmash · one word, one owner
         </div>
       </footer>
     </div>
