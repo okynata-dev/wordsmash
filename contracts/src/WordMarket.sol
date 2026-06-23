@@ -62,7 +62,12 @@ contract WordMarket is ERC20, ReentrancyGuard {
     event ProtocolFeesClaimed(address indexed to, uint256 amount);
     event Graduated(uint256 realEthReserve);
 
-    constructor() ERC20("", "") {}
+    /// @dev Lock the implementation (clone template) so it can never be initialized directly.
+    ///      Clones (EIP-1167) get their own fresh storage and run `initialize` normally; this only
+    ///      seals the logic contract itself, matching OZ's `_disableInitializers` hygiene.
+    constructor() ERC20("", "") {
+        initialized = true;
+    }
 
     function initialize(
         string memory name_,

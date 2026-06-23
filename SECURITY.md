@@ -21,7 +21,7 @@ snipe mechanics) or **audit-gated** (anything touching money paths before mainne
 | Caviar `x*y=k` ERC777 buy reentrancy | tokens out before payment settled | effects-before-`_transfer` in `buy`/`sell`; reserve is the contract's own ERC-20 (no external callback token) |
 | Truebit price overflow → free mint ($26.6M) | rounding/overflow → 0-cost buy | Solidity 0.8 checked math; `require(tokensOut > 0)` / `require(grossEthOut > 0)`; ceil-division rounds **against** the user so the curve constant never decreases |
 | Balancer / DFX rounding-direction drain | round in user's favor bleeds reserves | `invariant_reservesPositive` (k never decreases) + `test_RoundTripCannotProfit` (buy→sell ≤ paid) |
-| EIP-1167 uninitialized-clone front-run | attacker seizes a fresh clone | registry clones **and** initializes atomically in `claim` (`nonReentrant`, effects-first); `initialize` guarded by an `initialized` flag + zero-address checks |
+| EIP-1167 uninitialized-clone front-run | attacker seizes a fresh clone | registry clones **and** initializes atomically in `claim` (`nonReentrant`, effects-first); `initialize` guarded by an `initialized` flag + zero-address checks; the logic template itself is **locked in its constructor** (`initialized = true`, OZ `_disableInitializers` hygiene) so it can never be initialized directly |
 | Curves FeeSplitter access-control ($) | repoint fee recipient | all fee/config setters `onlyOwner`; deed-holder fee is pull-payment, credited to the holder at accrual |
 | pump.fun flash-loan buyout + key compromise | atomic graduation payout; EOA admin key | graduation is a one-way latch with **no** privileged payout; freezes buys, sells stay open (no LP handed out) |
 | Honeypot (block sells / freeze) | trap holders | `sell()` has no graduation/pause gate and always honors the curve — holders can **always** exit (`test_GraduationFreezesBuysButSellsStayOpen`) |
@@ -45,6 +45,20 @@ Sources for the above incidents/classes are listed at the bottom.
   + `X-Frame-Options: DENY` on every response, including the served SVG/HTML (stops MIME
   confusion). CORS stays `*` deliberately — public read APIs + cross-origin OG/avatar fetches;
   social writes are authed by signature recovery + replay guard, not by CORS.
+
+## Known design caveats (not vulnerabilities)
+
+- **Liquidity fee is a permanent sink — by design.** The `liquidityBps` share of every trade
+  fee (10% of the 1% fee) accrues to `liquidityFeesAccrued` and has **no withdrawal path and is
+  never re-injected** into the curve, so that ETH is permanently locked in the market clone.
+  This is deliberate: adding any extraction function would create a privileged drain (rug)
+  surface, so the fee is left credibly non-extractable until a future DEX-migration design
+  decides its fate. Curve solvency is unaffected — `realEthReserve` excludes the fee pots and is
+  fully backed (`invariant_marketAlwaysSolvent`). Do **not** "fix" this by adding a withdraw.
+- **Admin owner is an EOA on testnet → must be a multisig before mainnet.** All
+  fee/whitelist/config setters are `onlyOwner`; none can touch user funds or curve reserves
+  (`test_OwnerCannotTouchCurveFunds`), but key compromise would still let an attacker repoint the
+  protocol-fee receiver and toggle the whitelist. Migrate `owner()` to a multisig at launch.
 
 ## Roadmap — best launchpad innovations to adopt (prioritized)
 
