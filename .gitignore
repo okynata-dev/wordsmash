@@ -30,3 +30,6 @@ web/.vite/
 # Local env overrides (never commit)
 *.local
 .env*.local
+
+# throwaway demo-seed actor keys (testnet)
+contracts/.seed-actors.env
