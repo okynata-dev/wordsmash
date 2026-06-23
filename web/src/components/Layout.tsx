@@ -73,7 +73,7 @@ export function Layout() {
       >
         <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-4 py-3 sm:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight">wordsmash</span>
+            <span className="font-display text-lg font-semibold tracking-tight">wordsmash</span>
             <span className="hidden rounded bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted lg:inline">
               {activeChain.name}
             </span>

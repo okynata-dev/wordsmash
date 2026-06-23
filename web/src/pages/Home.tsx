@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   useAccount,
@@ -9,13 +9,14 @@ import { useQuery } from "@tanstack/react-query";
 import { normalizeWord } from "@shared/normalize";
 import { api } from "../api";
 import { registryAddress, wordRegistryAbi } from "../contracts";
-import { Button, Card, Spinner, Pill } from "../components/ui";
+import { Button, Card, Spinner, Pill, Skeleton, ErrorState } from "../components/ui";
 import { WhitelistGate } from "../components/WhitelistGate";
 import { WalletButton } from "../components/WalletButton";
-import { ActivityFeed, LiveBadge } from "../components/ActivityFeed";
+import { LiveBadge } from "../components/ActivityFeed";
 import { DiscoveryBoard } from "../components/DiscoveryBoard";
+import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
-import { friendlyError, ethLabel, formatEthAmount } from "../lib/format";
+import { friendlyError, ethLabel, timeAgo } from "../lib/format";
 import { useCountUp } from "../hooks/useCountUp";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
 import {
@@ -157,16 +158,32 @@ export function Home() {
 
   return (
     <div>
-      {/* Hero / claim */}
-      <section className="fade-up mx-auto mb-11 max-w-[680px] text-center">
-        <h1 className="text-balance text-3xl font-semibold leading-[1.05] tracking-tight sm:text-[44px]">
-          Claim a word.
-          <br />
-          Own it forever.
-        </h1>
-        <p className="mx-auto mt-4 text-muted">One word, one owner. Forever.</p>
+      {/* Social proof + scarcity — real /stats only, the page reads "alive" instantly */}
+      <div className="fade-up mb-9 flex flex-col items-center gap-3 border-b border-border pb-8 text-center">
+        <div className="flex items-center justify-center gap-9 sm:gap-16">
+          <Counter
+            value={stats?.wordsClaimed}
+            label="words claimed"
+            error={statsError}
+            onRetry={() => void refetchStats()}
+          />
+          <Counter
+            value={stats?.uniqueOwners}
+            label="owners"
+            error={statsError}
+            onRetry={() => void refetchStats()}
+          />
+        </div>
+        <p className="font-display text-sm text-muted">each word, once — never again</p>
+      </div>
 
-        <div className="mt-7 flex items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm">
+      {/* Claim — sits right above the live market, never floating in empty space */}
+      <section className="fade-up mx-auto mb-10 max-w-[620px] text-center">
+        <h1 className="font-display text-balance text-3xl font-semibold leading-[1.04] tracking-tight sm:text-[40px]">
+          Claim a word. Own it forever.
+        </h1>
+
+        <div className="mt-6 flex items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm">
           <label htmlFor="claim-word-input" className="sr-only">
             Word to claim
           </label>
@@ -224,50 +241,22 @@ export function Home() {
         )}
       </section>
 
-      {/* Browse: discovery grid + sticky live sidebar */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0">
-          <DiscoveryBoard />
-        </div>
-
-        <aside className="flex flex-col gap-5 lg:sticky lg:top-[84px]">
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-medium text-muted">
-                Live activity <LiveBadge />
-              </h2>
-            </div>
-            <ActivityFeed limit={6} compact live />
-            <Link
-              to="/activity"
-              className="mt-2.5 block text-[13px] text-muted hover:text-fg"
-            >
-              View all activity →
-            </Link>
-          </div>
-
-          <Card className="p-4">
-            <SideStat
-              label="Words claimed"
-              value={stats?.wordsClaimed}
-              error={statsError}
-              onRetry={() => void refetchStats()}
-            />
-            <SideStat
-              label="Unique owners"
-              value={stats?.uniqueOwners}
-              error={statsError}
-              onRetry={() => void refetchStats()}
-            />
-            <SideStat
-              label="Total volume"
-              ethWei={stats?.totalVolumeWei}
-              error={statsError}
-              onRetry={() => void refetchStats()}
-            />
-          </Card>
-        </aside>
+      {/* Live market: just-claimed (gone forever) + words on the secondary market */}
+      <div className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <JustClaimed />
+        <ForSale />
       </div>
+
+      {/* Discover */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-sm font-medium text-muted">Discover</h2>
+          <Link to="/top" className="text-xs text-muted hover:text-fg">
+            Leaderboard →
+          </Link>
+        </div>
+        <DiscoveryBoard />
+      </section>
     </div>
   );
 }
@@ -291,50 +280,155 @@ function StatusLine({ state }: { state: State }) {
   }
 }
 
-/**
- * Compact sidebar stat row (label left, live value right). Count-ups numeric
- * stats for the live feel; for ETH it tracks the trimmed label's numeric value
- * but rests on the exact ethLabel string so we never show a lossy float.
- */
-function SideStat({
-  label,
+/** Big count-up counter for the top social-proof strip. */
+function Counter({
   value,
-  ethWei,
+  label,
   error,
   onRetry,
 }: {
-  label: string;
   value?: number;
-  ethWei?: string;
+  label: string;
   error?: boolean;
   onRetry?: () => void;
 }) {
-  const ethTarget =
-    ethWei !== undefined ? Number(formatEthAmount(ethWei).replace(/,/g, "")) : undefined;
-  const animated = useCountUp(ethWei !== undefined ? ethTarget : value);
+  const animated = useCountUp(value);
+  const display =
+    error || value === undefined || animated === null ? "—" : Math.round(animated).toLocaleString();
+  return (
+    <div className="text-center">
+      <div className="font-display text-3xl font-semibold tabular-nums sm:text-[40px]">
+        {error ? (
+          <button onClick={onRetry} className="text-base font-normal text-muted underline">
+            retry
+          </button>
+        ) : (
+          display
+        )}
+      </div>
+      <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-faint">{label}</div>
+    </div>
+  );
+}
 
-  let display: string;
-  if (error) {
-    display = "";
-  } else if (ethWei !== undefined) {
-    display =
-      ethTarget === undefined ? "—" : `${(animated ?? ethTarget).toFixed(ethTarget >= 1 ? 2 : 4)} ETH`;
-  } else if (value === undefined || animated === null) {
-    display = "—";
-  } else {
-    display = Math.round(animated).toLocaleString();
-  }
+/**
+ * Live "just claimed" stream — real recently-claimed words from /words?sort=recent,
+ * polled for a live feel. New rows slide in once (row-enter); each word is shown as
+ * gone-forever (taken). Strict, monochrome, typographic — movement, not a casino.
+ */
+function JustClaimed() {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["words", "recent"],
+    queryFn: () => api.words("recent"),
+    retry: 1,
+    refetchInterval: 12_000,
+  });
+  const words = (data?.items ?? []).slice(0, 8);
+
+  // Animate only freshly-seen claims (not the whole list on every poll).
+  const seen = useRef<Set<string>>(new Set());
+  const primed = useRef(false);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!data) return;
+    if (!primed.current) {
+      words.forEach((w) => seen.current.add(w.tokenId));
+      primed.current = true;
+      return;
+    }
+    const f = new Set<string>();
+    words.forEach((w) => {
+      if (!seen.current.has(w.tokenId)) {
+        f.add(w.tokenId);
+        seen.current.add(w.tokenId);
+      }
+    });
+    if (f.size) setFresh(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   return (
-    <div className="flex items-center justify-between py-1.5 text-[13px]">
-      <span className="text-muted">{label}</span>
-      {error ? (
-        <button onClick={onRetry} className="font-medium text-muted underline">
-          retry
-        </button>
+    <section aria-label="Recently claimed">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-sm font-medium text-muted">
+        Just claimed <LiveBadge />
+      </h2>
+      {isLoading ? (
+        <Card className="divide-y divide-border">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="px-4 py-3">
+              <Skeleton className="h-5 w-40" />
+            </div>
+          ))}
+        </Card>
+      ) : isError ? (
+        <ErrorState message="Couldn’t load the feed." onRetry={() => void refetch()} />
+      ) : words.length === 0 ? (
+        <Card className="p-5 text-sm text-muted">No words claimed yet. Be the first.</Card>
       ) : (
-        <span className="font-semibold tabular-nums">{display}</span>
+        <Card className="divide-y divide-border overflow-hidden">
+          {words.map((w) => (
+            <Link
+              key={w.tokenId}
+              to={`/word/${encodeURIComponent(w.word)}`}
+              className={`flex items-center justify-between gap-2 px-4 py-3 transition hover:bg-surface-2 ${
+                fresh.has(w.tokenId) ? "row-enter" : ""
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="word-display truncate text-base">{w.word}</span>
+                <span className="shrink-0 text-[11px] uppercase tracking-wide text-faint">gone</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-3 text-xs text-muted">
+                <UserBadge address={w.owner} size={18} link={false} textClassName="text-xs" />
+                <span className="tabular-nums text-faint">{timeAgo(w.claimedAt)}</span>
+              </span>
+            </Link>
+          ))}
+        </Card>
       )}
-    </div>
+    </section>
+  );
+}
+
+/** Words currently on the secondary market — a live resale market forming, real /market data. */
+function ForSale() {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["market"],
+    queryFn: api.market,
+    retry: 1,
+    refetchInterval: 15_000,
+  });
+  const listings = (data ?? []).slice(0, 8);
+
+  return (
+    <section aria-label="For sale">
+      <h2 className="mb-3 font-display text-sm font-medium text-muted">For sale</h2>
+      {isLoading ? (
+        <Card className="divide-y divide-border">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="px-4 py-3">
+              <Skeleton className="h-5 w-40" />
+            </div>
+          ))}
+        </Card>
+      ) : isError ? (
+        <ErrorState message="Couldn’t load listings." onRetry={() => void refetch()} />
+      ) : listings.length === 0 ? (
+        <Card className="p-5 text-sm text-muted">No words listed for resale yet.</Card>
+      ) : (
+        <Card className="divide-y divide-border overflow-hidden">
+          {listings.map((l) => (
+            <Link
+              key={l.tokenId}
+              to={`/word/${encodeURIComponent(l.word)}`}
+              className="flex items-center justify-between gap-2 px-4 py-3 transition hover:bg-surface-2"
+            >
+              <span className="word-display truncate text-base">{l.word}</span>
+              <span className="shrink-0 text-sm font-medium tabular-nums">{ethLabel(l.price)}</span>
+            </Link>
+          ))}
+        </Card>
+      )}
+    </section>
   );
 }

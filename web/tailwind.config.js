@@ -37,6 +37,8 @@ export default {
           "sans-serif",
         ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        // The wordmark/heading typeface, pinned via a CSS var (see :root --font-display).
+        display: ["var(--font-display)"],
       },
       // Half-step spacing used by the ported screens (p-4.5, px-5.5, h-4.5, …).
       spacing: {

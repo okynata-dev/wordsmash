@@ -21,6 +21,14 @@
   --c-positive: 22 101 52;
   --c-negative: 153 27 27;
   --c-warning: 146 64 14;
+
+  /*
+    Display typeface — the wordsmash wordmark's font, pinned here so the logo (and
+    the headings that share it) render identically across rebuilds even if the
+    body `sans` stack is ever retuned. Do not change this without changing the logo.
+  */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", Inter, ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
