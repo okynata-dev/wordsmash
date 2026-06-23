@@ -256,3 +256,25 @@ body {
     transition: none;
   }
 }
+
+/* Smash ticker — continuous marquee of real activity. Content is duplicated x2,
+   so translating -50% loops seamlessly. Pauses on hover; off for reduced motion. */
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.ticker {
+  animation: ticker 48s linear infinite;
+}
+.ticker:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker {
+    animation: none;
+  }
+}

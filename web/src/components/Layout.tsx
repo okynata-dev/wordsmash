@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { WalletButton } from "./WalletButton";
 import { SearchBox } from "./SearchBox";
+import { SmashTicker } from "./SmashTicker";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { activeChain } from "../wagmi";
 import { normAddr } from "../lib/format";
@@ -142,6 +143,8 @@ export function Layout() {
           </div>
         )}
       </header>
+
+      <SmashTicker />
 
       <main className="mx-auto w-full max-w-[1120px] flex-1 px-4 py-8 sm:px-6">
         {/* Route-level recoverable boundary: keyed on the path so navigating away clears a crash. */}

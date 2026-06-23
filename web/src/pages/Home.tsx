@@ -182,6 +182,9 @@ export function Home() {
         <h1 className="font-display text-balance text-3xl font-semibold leading-[1.04] tracking-tight sm:text-[40px]">
           Claim a word. Own it forever.
         </h1>
+        <p className="mt-3 text-sm text-muted">
+          Own the word. Earn every time it trades.
+        </p>
 
         <div className="mt-6 flex items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm">
           <label htmlFor="claim-word-input" className="sr-only">
