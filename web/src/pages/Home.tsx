@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   useAccount,
@@ -181,32 +181,30 @@ export function Home() {
     <div>
       {/* SMASH hero — the page leads with energy, not data. The typed word slams in
           on every keystroke; claiming fires a particle burst + impact shake. */}
-      <section
-        className={`fade-up relative mx-auto mb-8 max-w-[680px] text-center ${shake ? "smash-shake" : ""}`}
-      >
-        <h1 className="font-display text-balance text-2xl font-semibold tracking-tight sm:text-[26px]">
-          <span className="text-muted">Smash a word.</span> Own it forever.
+      <section className={`fade-up mb-10 ${shake ? "smash-shake" : ""}`}>
+        <h1 className="font-display text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+          Smash a word. <span className="text-muted">Own it forever.</span>
         </h1>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-1.5 text-sm text-muted">
           One word, one owner — and you earn every time it trades.
         </p>
 
-        {/* Giant live word — the dopamine surface, lit volt when it's yours to take. */}
-        <div className="relative mx-auto mt-5 mb-2 flex min-h-[84px] items-center justify-center sm:min-h-[120px]">
-          <SmashBurst fireKey={burstKey} />
+        {/* Live word preview — only while typing, modest + left-aligned (no giant idle splash). */}
+        {bigWord && (
           <div
-            key={bigWord || "empty"}
-            className={`smash-punch word-display select-none break-all text-[3.25rem] leading-none sm:text-[5.5rem] ${bigWordClass}`}
+            key={bigWord}
+            className={`smash-punch word-display mt-4 select-none break-all text-4xl leading-none sm:text-5xl ${bigWordClass}`}
           >
-            {bigWord || <span className="text-faint">smash</span>}
+            {bigWord}
           </div>
-        </div>
+        )}
 
         <div
-          className={`mx-auto flex max-w-[560px] items-center gap-2 rounded-xl border bg-surface p-2 pl-4 text-left shadow-sm transition ${
+          className={`relative mt-4 flex max-w-[560px] items-center gap-2 rounded-xl border bg-surface p-2 pl-4 shadow-sm transition ${
             state.kind === "available" ? "border-transparent volt-glow" : "border-border"
           }`}
         >
+          <SmashBurst fireKey={burstKey} />
           <label htmlFor="claim-word-input" className="sr-only">
             Word to claim
           </label>
@@ -245,7 +243,7 @@ export function Home() {
           id="claim-status"
           role="status"
           aria-live="polite"
-          className="mt-2.5 flex min-h-[1.75rem] items-center justify-center"
+          className="mt-2.5 flex min-h-[1.75rem] items-center"
         >
           <StatusLine state={state} />
         </div>
@@ -298,11 +296,8 @@ export function Home() {
         </p>
       )}
 
-      {/* Live market: just-claimed (gone forever) + words on the secondary market */}
-      <div className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <JustClaimed />
-        <ForSale />
-      </div>
+      {/* The buzz — a live wall of claimed words. */}
+      <WordGrid />
 
       {/* Discover */}
       <section>
@@ -414,7 +409,7 @@ function SuggestionChips({ onPick }: { onPick: (w: string) => void }) {
   return (
     <div className="mt-5">
       <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-faint">free words, waiting</p>
-      <div className="flex flex-wrap justify-center gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {SMASH_SUGGESTIONS.map((w) => (
           <button
             key={w}
@@ -430,122 +425,51 @@ function SuggestionChips({ onPick }: { onPick: (w: string) => void }) {
 }
 
 /**
- * Live "just claimed" stream — real recently-claimed words from /words?sort=recent,
- * polled for a live feel. New rows slide in once (row-enter); each word is shown as
- * gone-forever (taken). Strict, monochrome, typographic — movement, not a casino.
+ * The buzz — a wall of recently-claimed words as cards (pump-style). Real
+ * /words?sort=recent data, or curated demo words when the chain is still empty.
  */
-function JustClaimed() {
+function WordGrid() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["words", "recent"],
     queryFn: () => api.words("recent"),
     retry: 1,
     refetchInterval: 12_000,
   });
-  const words = (data?.items ?? []).slice(0, 8);
-
-  // Animate only freshly-seen claims (not the whole list on every poll).
-  const seen = useRef<Set<string>>(new Set());
-  const primed = useRef(false);
-  const [fresh, setFresh] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (!data) return;
-    if (!primed.current) {
-      words.forEach((w) => seen.current.add(w.tokenId));
-      primed.current = true;
-      return;
-    }
-    const f = new Set<string>();
-    words.forEach((w) => {
-      if (!seen.current.has(w.tokenId)) {
-        f.add(w.tokenId);
-        seen.current.add(w.tokenId);
-      }
-    });
-    if (f.size) setFresh(f);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  const words = (data?.items ?? []).slice(0, 12);
 
   return (
-    <section aria-label="Recently claimed">
+    <section aria-label="Recently claimed" className="mb-12">
       <h2 className="mb-3 flex items-center gap-2 font-display text-sm font-medium text-muted">
         Just claimed <LiveBadge />
       </h2>
       {isLoading ? (
-        <Card className="divide-y divide-border">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="px-4 py-3">
-              <Skeleton className="h-5 w-40" />
-            </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Card key={i} className="p-4">
+              <Skeleton className="h-7 w-24" />
+            </Card>
           ))}
-        </Card>
+        </div>
       ) : isError ? (
         <ErrorState message="Couldn’t load the feed." onRetry={() => void refetch()} />
       ) : words.length === 0 ? (
         <Card className="p-5 text-sm text-muted">No words claimed yet. Be the first.</Card>
       ) : (
-        <Card className="divide-y divide-border overflow-hidden">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {words.map((w) => (
             <Link
               key={w.tokenId}
               to={`/word/${encodeURIComponent(w.word)}`}
-              className={`flex items-center justify-between gap-2 px-4 py-3 transition hover:bg-surface-2 ${
-                fresh.has(w.tokenId) ? "row-enter" : ""
-              }`}
+              className="card-lift flex flex-col justify-between rounded-xl border border-border bg-surface p-4 transition"
             >
-              <span className="flex min-w-0 items-center gap-2.5">
-                <span className="word-display truncate text-base">{w.word}</span>
-                <span className="shrink-0 text-[11px] uppercase tracking-wide text-faint">gone</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-3 text-xs text-muted">
+              <span className="word-display truncate text-2xl">{w.word}</span>
+              <span className="mt-3 flex items-center justify-between gap-2 text-xs text-muted">
                 <UserBadge address={w.owner} size={18} link={false} textClassName="text-xs" />
-                <span className="tabular-nums text-faint">{timeAgo(w.claimedAt)}</span>
+                <span className="shrink-0 tabular-nums text-faint">{timeAgo(w.claimedAt)}</span>
               </span>
             </Link>
           ))}
-        </Card>
-      )}
-    </section>
-  );
-}
-
-/** Words currently on the secondary market — a live resale market forming, real /market data. */
-function ForSale() {
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["market"],
-    queryFn: api.market,
-    retry: 1,
-    refetchInterval: 15_000,
-  });
-  const listings = (data ?? []).slice(0, 8);
-
-  return (
-    <section aria-label="For sale">
-      <h2 className="mb-3 font-display text-sm font-medium text-muted">For sale</h2>
-      {isLoading ? (
-        <Card className="divide-y divide-border">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="px-4 py-3">
-              <Skeleton className="h-5 w-40" />
-            </div>
-          ))}
-        </Card>
-      ) : isError ? (
-        <ErrorState message="Couldn’t load listings." onRetry={() => void refetch()} />
-      ) : listings.length === 0 ? (
-        <Card className="p-5 text-sm text-muted">No words listed for resale yet.</Card>
-      ) : (
-        <Card className="divide-y divide-border overflow-hidden">
-          {listings.map((l) => (
-            <Link
-              key={l.tokenId}
-              to={`/word/${encodeURIComponent(l.word)}`}
-              className="flex items-center justify-between gap-2 px-4 py-3 transition hover:bg-surface-2"
-            >
-              <span className="word-display truncate text-base">{l.word}</span>
-              <span className="shrink-0 text-sm font-medium tabular-nums">{ethLabel(l.price)}</span>
-            </Link>
-          ))}
-        </Card>
+        </div>
       )}
     </section>
   );

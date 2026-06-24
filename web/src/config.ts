@@ -28,6 +28,11 @@ export const WALLETCONNECT_PROJECT_ID = env("VITE_WALLETCONNECT_PROJECT_ID") ?? 
 // VITE_USE_ANVIL=1 selects the local anvil chain; otherwise Base Sepolia.
 export const USE_ANVIL = bool("VITE_USE_ANVIL");
 
+// VITE_DEMO_MODE=1 fills EMPTY surfaces (feed, stats, activity, a word's page +
+// comments) with curated demo content so the site reads as "alive" before real
+// activity exists. Real data always wins once present. Turn OFF for a pure-real site.
+export const DEMO_MODE = bool("VITE_DEMO_MODE");
+
 export const ANVIL_RPC = env("VITE_ANVIL_RPC") ?? "http://localhost:8545";
 export const BASE_SEPOLIA_RPC = env("VITE_BASE_SEPOLIA_RPC") ?? "https://sepolia.base.org";
 

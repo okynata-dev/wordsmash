@@ -19,6 +19,15 @@ import type {
   PricePoint,
 } from "@shared/types";
 import type { Comment } from "@shared/social";
+import {
+  DEMO,
+  demoHasWord,
+  demoWords,
+  demoStats,
+  demoActivity,
+  demoWordDetail,
+  demoComments,
+} from "./demo";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -85,10 +94,22 @@ export const api = {
   check: (word: string) => get<CheckResult>(`/check/${encodeURIComponent(word)}`),
 
   /** GET /stats -> global counters. */
-  stats: () => get<Stats>(`/stats`),
+  stats: async (): Promise<Stats> => {
+    const s = await get<Stats>(`/stats`);
+    return DEMO && s.wordsClaimed === 0 ? demoStats() : s;
+  },
 
   /** GET /word/:word -> detail incl. ownership history + listing + token market. */
-  word: (word: string) => get<WordDetail>(`/word/${encodeURIComponent(word)}`),
+  word: async (word: string): Promise<WordDetail> => {
+    try {
+      const d = await get<WordDetail>(`/word/${encodeURIComponent(word)}`);
+      if (DEMO && d.owner === null && demoHasWord(word)) return demoWordDetail(word);
+      return d;
+    } catch (e) {
+      if (DEMO && demoHasWord(word)) return demoWordDetail(word);
+      throw e;
+    }
+  },
 
   /** GET /word/:word/trades?cursor= -> a page of token-market trades (newest first). */
   trades: (word: string, cursor?: string) => {
@@ -128,6 +149,7 @@ export const api = {
       cursor = page?.cursor ?? null;
       pages += 1;
     } while (cursor && pages < maxPages);
+    if (DEMO && items.length === 0) return { items: demoWords(), truncated: false };
     return { items, truncated: Boolean(cursor) };
   },
 
@@ -135,7 +157,10 @@ export const api = {
   market: () => getList<ListingRow>(`/market`),
 
   /** GET /activity -> recent platform-wide activity. */
-  activity: () => getList<ActivityRow>(`/activity`),
+  activity: async (): Promise<ActivityRow[]> => {
+    const a = await getList<ActivityRow>(`/activity`);
+    return DEMO && a.length === 0 ? demoActivity() : a;
+  },
 
   /** GET /search?q= -> matching words and users. */
   search: (q: string) => get<SearchResult>(`/search?q=${encodeURIComponent(q)}`),
@@ -144,8 +169,15 @@ export const api = {
   userByName: (username: string) => get<Profile>(`/u/${encodeURIComponent(username)}`),
 
   /** GET /word/:word/comments -> comment thread. */
-  comments: (word: string) =>
-    getList<Comment>(`/word/${encodeURIComponent(word)}/comments`),
+  comments: async (word: string): Promise<Comment[]> => {
+    try {
+      const c = await getList<Comment>(`/word/${encodeURIComponent(word)}/comments`);
+      if (c.length) return c;
+    } catch {
+      /* fall through to demo for demo words */
+    }
+    return DEMO && demoHasWord(word) ? demoComments(word) : [];
+  },
 
   /** POST /word/:word/comments -> add a comment (signed). */
   postComment: (
