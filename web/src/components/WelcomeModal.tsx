@@ -55,7 +55,7 @@ export function WelcomeModal() {
 
         <button
           onClick={enter}
-          className="volt-glow mt-5 w-full rounded-xl !bg-[rgb(var(--c-volt))] px-4 py-3 text-sm font-medium text-white transition hover:opacity-90 active:scale-[0.99]"
+          className="volt-glow mt-5 w-full rounded-xl px-4 py-3 text-sm font-semibold text-[#06182e] transition hover:opacity-90 active:scale-[0.99]"
           style={{ backgroundColor: "rgb(var(--c-volt))" }}
         >
           Enter

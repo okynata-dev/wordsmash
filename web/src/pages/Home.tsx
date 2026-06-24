@@ -151,7 +151,7 @@ export function Home() {
   const claimAction = (
     <WhitelistGate compact>
       <Button
-        className="shrink-0 !bg-[rgb(var(--c-volt))] !text-white volt-glow"
+        className="shrink-0 !bg-[rgb(var(--c-volt))] !text-[#06182e] volt-glow"
         onClick={doClaim}
         disabled={
           state.kind !== "available" ||
