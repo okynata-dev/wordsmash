@@ -278,3 +278,92 @@ body {
     animation: none;
   }
 }
+
+/*
+  SMASH — the brand's emotional core. One loud "voltage" signature color plus a
+  small kit of impact primitives: a per-keystroke punch on the giant live word, a
+  screen-shake + radial particle burst on claim. Token-driven, GPU-cheap, fully
+  reduced-motion gated. This is the dopamine layer that works with ZERO data.
+*/
+:root {
+  --c-volt: 124 92 255;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-volt: 141 111 255;
+  }
+}
+.text-volt {
+  color: rgb(var(--c-volt));
+}
+
+/* Live word slams in on every keystroke. */
+@keyframes smash-punch {
+  0% {
+    transform: scale(0.72);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.09);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.smash-punch {
+  animation: smash-punch 0.22s cubic-bezier(0.2, 1.4, 0.3, 1) both;
+}
+
+/* Brief impact shake on the hero when you smash. */
+@keyframes smash-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 2px); }
+  40% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, -1px); }
+  80% { transform: translate(3px, 1px); }
+}
+.smash-shake {
+  animation: smash-shake 0.42s ease-in-out;
+}
+
+/* Radial particle burst — each particle carries its own --dx/--dy vector. */
+@keyframes smash-fly {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2);
+    opacity: 0;
+  }
+}
+.smash-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 10px;
+  width: 10px;
+  border-radius: 2px;
+  background: rgb(var(--c-volt));
+  animation: smash-fly 0.7s cubic-bezier(0.2, 0.6, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* Voltage halo on the input once a word is claimable. */
+.volt-glow {
+  box-shadow:
+    0 0 0 1px rgb(var(--c-volt) / 0.55),
+    0 0 26px -4px rgb(var(--c-volt) / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smash-punch,
+  .smash-shake,
+  .smash-particle {
+    animation: none;
+  }
+  .smash-particle {
+    display: none;
+  }
+}

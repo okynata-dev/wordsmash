@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   useAccount,
@@ -38,6 +38,16 @@ export function Home() {
   const [state, setState] = useState<State>({ kind: "idle" });
   const navigate = useNavigate();
   const toast = useToast();
+
+  // Smash feedback — the visceral core of the brand. Firing increments a key that
+  // remounts the particle burst and toggles a brief screen-shake on the hero.
+  const [burstKey, setBurstKey] = useState(0);
+  const [shake, setShake] = useState(false);
+  function fireSmash() {
+    setBurstKey((k) => k + 1);
+    setShake(true);
+    window.setTimeout(() => setShake(false), 420);
+  }
 
   const { address, isConnected } = useAccount();
   const wrongNetwork = useWrongNetwork();
@@ -93,6 +103,7 @@ export function Home() {
   useEffect(() => {
     if (isSuccess && state.kind !== "idle") {
       const w = "normalized" in state ? state.normalized : raw;
+      fireSmash(); // celebration burst the moment the claim lands
       toast.success(`Claimed "${w}"`);
       void refetchRemaining();
       // Prime caches and wait out indexer lag before navigating, so the word page
@@ -110,8 +121,18 @@ export function Home() {
   const remainingNum = remaining !== undefined ? Number(remaining) : undefined;
   const outOfClaims = remainingNum !== undefined && remainingNum <= 0;
 
+  // The giant live word above the input, lit volt when it's yours to take.
+  const bigWord = norm.ok ? norm.normalized : raw.trim();
+  const bigWordClass =
+    state.kind === "available" || state.kind === "checking"
+      ? "text-volt"
+      : state.kind === "taken"
+        ? "text-muted line-through decoration-2"
+        : "text-faint";
+
   function doClaim() {
     if (state.kind !== "available") return;
+    fireSmash(); // instant tactile feedback on intent, before the wallet round-trip
     writeContract(
       {
         address: registryAddress,
@@ -130,7 +151,7 @@ export function Home() {
   const claimAction = (
     <WhitelistGate compact>
       <Button
-        className="shrink-0"
+        className="shrink-0 !bg-[rgb(var(--c-volt))] !text-white volt-glow"
         onClick={doClaim}
         disabled={
           state.kind !== "available" ||
@@ -143,10 +164,10 @@ export function Home() {
       >
         {isPending || confirming || syncing ? (
           <>
-            <Spinner /> {syncing ? "Syncing…" : "Claiming…"}
+            <Spinner /> {syncing ? "Syncing…" : "Smashing…"}
           </>
         ) : claimFee !== undefined ? (
-          `Claim${(claimFee as bigint) > 0n ? ` · ${ethLabel(claimFee as bigint)}` : " (free)"}`
+          `Smash it${(claimFee as bigint) > 0n ? ` · ${ethLabel(claimFee as bigint)}` : " (free)"}`
         ) : (
           <>
             <Spinner /> Loading fee…
@@ -158,35 +179,31 @@ export function Home() {
 
   return (
     <div>
-      {/* Social proof + scarcity — real /stats only, the page reads "alive" instantly */}
-      <div className="fade-up mb-9 flex flex-col items-center gap-3 border-b border-border pb-8 text-center">
-        <div className="flex items-center justify-center gap-9 sm:gap-16">
-          <Counter
-            value={stats?.wordsClaimed}
-            label="words claimed"
-            error={statsError}
-            onRetry={() => void refetchStats()}
-          />
-          <Counter
-            value={stats?.uniqueOwners}
-            label="owners"
-            error={statsError}
-            onRetry={() => void refetchStats()}
-          />
-        </div>
-        <p className="font-display text-sm text-muted">each word, once — never again</p>
-      </div>
-
-      {/* Claim — sits right above the live market, never floating in empty space */}
-      <section className="fade-up mx-auto mb-10 max-w-[620px] text-center">
-        <h1 className="font-display text-balance text-3xl font-semibold leading-[1.04] tracking-tight sm:text-[40px]">
-          Claim a word. Own it forever.
+      {/* SMASH hero — the page leads with energy, not data. The typed word slams in
+          on every keystroke; claiming fires a particle burst + impact shake. */}
+      <section
+        className={`fade-up relative mx-auto mb-8 max-w-[680px] text-center ${shake ? "smash-shake" : ""}`}
+      >
+        <h1 className="font-display text-balance text-2xl font-semibold tracking-tight sm:text-[26px]">
+          <span className="text-muted">Smash a word.</span> Own it forever.
         </h1>
-        <p className="mt-3 text-sm text-muted">
-          Own the word. Earn every time it trades.
-        </p>
 
-        <div className="mt-6 flex items-center gap-2 rounded-xl border border-border bg-surface p-2 pl-4 text-left shadow-sm">
+        {/* Giant live word — the dopamine surface, lit volt when it's yours to take. */}
+        <div className="relative mx-auto mt-5 mb-2 flex min-h-[84px] items-center justify-center sm:min-h-[120px]">
+          <SmashBurst fireKey={burstKey} />
+          <div
+            key={bigWord || "empty"}
+            className={`smash-punch word-display select-none break-all text-[3.25rem] leading-none sm:text-[5.5rem] ${bigWordClass}`}
+          >
+            {bigWord || <span className="text-faint">smash</span>}
+          </div>
+        </div>
+
+        <div
+          className={`mx-auto flex max-w-[560px] items-center gap-2 rounded-xl border bg-surface p-2 pl-4 text-left shadow-sm transition ${
+            state.kind === "available" ? "border-transparent volt-glow" : "border-border"
+          }`}
+        >
           <label htmlFor="claim-word-input" className="sr-only">
             Word to claim
           </label>
@@ -242,7 +259,33 @@ export function Home() {
               : "Claims are limited per wallet to keep things fair."}
           </p>
         )}
+
+        {/* Alive empty-state: real claimable words, one tap from smashing into the hero. */}
+        <SuggestionChips onPick={(w) => setRaw(w)} />
       </section>
+
+      {/* Slim social proof — only when there's real data; never a deflating 0/0. */}
+      {stats && stats.wordsClaimed > 0 ? (
+        <div className="fade-up mb-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 border-y border-border py-4">
+          <Counter
+            value={stats.wordsClaimed}
+            label="words claimed"
+            error={statsError}
+            onRetry={() => void refetchStats()}
+          />
+          <Counter
+            value={stats.uniqueOwners}
+            label="owners"
+            error={statsError}
+            onRetry={() => void refetchStats()}
+          />
+          <span className="font-display text-sm text-muted">each word, once — never again</span>
+        </div>
+      ) : (
+        <p className="fade-up mb-10 border-y border-border py-4 text-center font-display text-sm text-muted">
+          each word, once — never again
+        </p>
+      )}
 
       {/* Live market: just-claimed (gone forever) + words on the secondary market */}
       <div className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -283,7 +326,7 @@ function StatusLine({ state }: { state: State }) {
   }
 }
 
-/** Big count-up counter for the top social-proof strip. */
+/** Compact count-up stat for the slim social-proof strip. */
 function Counter({
   value,
   label,
@@ -299,17 +342,78 @@ function Counter({
   const display =
     error || value === undefined || animated === null ? "—" : Math.round(animated).toLocaleString();
   return (
-    <div className="text-center">
-      <div className="font-display text-3xl font-semibold tabular-nums sm:text-[40px]">
+    <div className="flex items-baseline gap-1.5">
+      <span className="font-display text-xl font-semibold tabular-nums">
         {error ? (
-          <button onClick={onRetry} className="text-base font-normal text-muted underline">
+          <button onClick={onRetry} className="text-sm font-normal text-muted underline">
             retry
           </button>
         ) : (
           display
         )}
+      </span>
+      <span className="text-[11px] uppercase tracking-[0.12em] text-faint">{label}</span>
+    </div>
+  );
+}
+
+/** Curated, genuinely-claimable words — the empty-state has energy, not zeros. */
+const SMASH_SUGGESTIONS = [
+  "base", "degen", "gm", "alpha", "moon", "wagmi",
+  "onchain", "based", "frens", "lfg", "vibe", "mint",
+];
+
+/**
+ * Radial particle burst. Keyed by `fireKey` so each smash remounts it and replays
+ * the animation from scratch. Particles fly out along evenly-spread vectors.
+ */
+function SmashBurst({ fireKey }: { fireKey: number }) {
+  if (fireKey === 0) return null;
+  const count = 16;
+  const parts = Array.from({ length: count }, (_, i) => {
+    const ang = (Math.PI * 2 * i) / count + (i % 2 ? 0.35 : 0);
+    const dist = 70 + (i % 4) * 26;
+    return {
+      dx: Math.round(Math.cos(ang) * dist),
+      dy: Math.round(Math.sin(ang) * dist),
+      delay: (i % 5) * 0.012,
+    };
+  });
+  return (
+    <div key={fireKey} className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
+      {parts.map((p, i) => (
+        <span
+          key={i}
+          className="smash-particle"
+          style={
+            {
+              "--dx": `${p.dx}px`,
+              "--dy": `${p.dy}px`,
+              animationDelay: `${p.delay}s`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/** "Free words, waiting" — tapping one smashes it straight into the hero input. */
+function SuggestionChips({ onPick }: { onPick: (w: string) => void }) {
+  return (
+    <div className="mt-5">
+      <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-faint">free words, waiting</p>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        {SMASH_SUGGESTIONS.map((w) => (
+          <button
+            key={w}
+            onClick={() => onPick(w)}
+            className="rounded-full border border-border bg-surface px-3 py-1 text-sm text-muted transition hover:border-[rgb(var(--c-volt))] hover:text-[rgb(var(--c-volt))]"
+          >
+            {w}
+          </button>
+        ))}
       </div>
-      <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-faint">{label}</div>
     </div>
   );
 }
