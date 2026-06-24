@@ -22,7 +22,11 @@ export function AppRoot() {
   return (
     <React.StrictMode>
       <ErrorBoundary>
-        <WagmiProvider config={wagmiConfig}>
+        {/* reconnectOnMount=false: never touch a wallet on page load. Auto-reconnect
+            would re-probe the injected wallet on every visit, which makes the browser
+            pop a "let this site access other apps" permission before the user has
+            clicked anything. Wallet interaction now happens only on an explicit Connect. */}
+        <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
               <BrowserRouter>
