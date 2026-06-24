@@ -187,6 +187,9 @@ export function Home() {
         <h1 className="font-display text-balance text-2xl font-semibold tracking-tight sm:text-[26px]">
           <span className="text-muted">Smash a word.</span> Own it forever.
         </h1>
+        <p className="mt-2 text-sm text-muted">
+          One word, one owner — and you earn every time it trades.
+        </p>
 
         {/* Giant live word — the dopamine surface, lit volt when it's yours to take. */}
         <div className="relative mx-auto mt-5 mb-2 flex min-h-[84px] items-center justify-center sm:min-h-[120px]">
@@ -259,6 +262,14 @@ export function Home() {
               : "Claims are limited per wallet to keep things fair."}
           </p>
         )}
+
+        <p className="mt-3 text-xs text-faint">
+          By smashing a word you agree to the{" "}
+          <Link to="/legal" className="underline hover:text-fg">
+            terms &amp; risk
+          </Link>
+          .
+        </p>
 
         {/* Alive empty-state: real claimable words, one tap from smashing into the hero. */}
         <SuggestionChips onPick={(w) => setRaw(w)} />

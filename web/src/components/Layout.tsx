@@ -4,6 +4,7 @@ import { useAccount } from "wagmi";
 import { WalletButton } from "./WalletButton";
 import { SearchBox } from "./SearchBox";
 import { SmashTicker } from "./SmashTicker";
+import { WelcomeModal } from "./WelcomeModal";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { activeChain } from "../wagmi";
 import { normAddr } from "../lib/format";
@@ -154,10 +155,15 @@ export function Layout() {
       </main>
 
       <footer className="border-t border-border">
-        <div className="mx-auto max-w-[1120px] px-4 py-6 text-xs text-faint sm:px-6">
-          wordsmash · one word, one owner
+        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-2 px-4 py-6 text-xs text-faint sm:px-6">
+          <span>wordsmash · one word, one owner</span>
+          <Link to="/legal" className="hover:text-fg">
+            Terms &amp; risk
+          </Link>
         </div>
       </footer>
+
+      <WelcomeModal />
     </div>
   );
 }

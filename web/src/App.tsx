@@ -7,6 +7,7 @@ import { Market } from "./pages/Market";
 import { Top } from "./pages/Top";
 import { Activity } from "./pages/Activity";
 import { Watchlist } from "./pages/Watchlist";
+import { Legal } from "./pages/Legal";
 import { UserRoute } from "./pages/UserRoute";
 import { AddressGate } from "./components/AddressGate";
 import { ADDRESSES_READY } from "./config";
@@ -28,6 +29,7 @@ export function App() {
             <Route path="top" element={<Top />} />
             <Route path="activity" element={<Activity />} />
             <Route path="watchlist" element={<Watchlist />} />
+            <Route path="legal" element={<Legal />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (
