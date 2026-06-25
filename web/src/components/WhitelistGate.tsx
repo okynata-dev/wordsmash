@@ -63,7 +63,7 @@ export function WhitelistGate({
   // Whitelist on and NOT allowed.
   if (compact) {
     return (
-      <Button disabled title="Closed beta — your wallet isn’t on the allowlist yet.">
+      <Button disabled title="Closed beta. Your wallet isn’t on the allowlist yet.">
         Closed beta
       </Button>
     );
@@ -76,7 +76,7 @@ export function WhitelistGate({
     return (
       <Card className="space-y-3 p-4">
         <p className="text-sm text-muted">
-          You&apos;re on the closed-beta allowlist. Verify once to unlock claiming, listing and buying.
+          You&apos;re on the closed-beta allowlist. Verify once to start claiming, listing and buying.
         </p>
         <Button
           onClick={() =>

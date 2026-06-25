@@ -151,7 +151,7 @@ export function Home() {
   const claimAction = (
     <WhitelistGate compact>
       <Button
-        className="shrink-0 !bg-[rgb(var(--c-volt))] !text-[#06182e] volt-glow"
+        className="shrink-0 !bg-[rgb(var(--c-volt))] !text-white volt-glow"
         onClick={doClaim}
         disabled={
           state.kind !== "available" ||
@@ -164,10 +164,10 @@ export function Home() {
       >
         {isPending || confirming || syncing ? (
           <>
-            <Spinner /> {syncing ? "Syncing…" : "Smashing…"}
+            <Spinner /> {syncing ? "Syncing…" : "Keeping…"}
           </>
         ) : claimFee !== undefined ? (
-          `Smash it${(claimFee as bigint) > 0n ? ` · ${ethLabel(claimFee as bigint)}` : " (free)"}`
+          `Keep it${(claimFee as bigint) > 0n ? ` · ${ethLabel(claimFee as bigint)}` : " (free)"}`
         ) : (
           <>
             <Spinner /> Loading fee…
@@ -183,17 +183,17 @@ export function Home() {
           on every keystroke; claiming fires a particle burst + impact shake. */}
       <section className={`fade-up mb-10 ${shake ? "smash-shake" : ""}`}>
         <h1 className="font-display text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
-          Smash a word. <span className="text-muted">Own it forever.</span>
+          Keep a word. <span className="text-muted">Own it forever.</span>
         </h1>
         <p className="mt-1.5 text-sm text-muted">
-          One word, one owner — and you earn every time it trades.
+          One word, one owner. You earn every time it trades.
         </p>
 
         {/* Live word preview — only while typing, modest + left-aligned (no giant idle splash). */}
         {bigWord && (
           <div
             key={bigWord}
-            className={`smash-punch word-display mt-4 select-none break-all text-4xl leading-none sm:text-5xl ${bigWordClass}`}
+            className={`smash-punch word-display mt-4 max-w-full select-none overflow-hidden break-all text-4xl leading-none sm:text-5xl ${bigWordClass}`}
           >
             {bigWord}
           </div>
@@ -262,7 +262,7 @@ export function Home() {
         )}
 
         <p className="mt-3 text-xs text-faint">
-          By smashing a word you agree to the{" "}
+          By keeping a word you agree to the{" "}
           <Link to="/legal" className="underline hover:text-fg">
             terms &amp; risk
           </Link>
@@ -288,11 +288,11 @@ export function Home() {
             error={statsError}
             onRetry={() => void refetchStats()}
           />
-          <span className="font-display text-sm text-muted">each word, once — never again</span>
+          <span className="font-display text-sm text-muted">each word claimed once, never again</span>
         </div>
       ) : (
         <p className="fade-up mb-10 border-y border-border py-4 text-center font-display text-sm text-muted">
-          each word, once — never again
+          each word claimed once, never again
         </p>
       )}
 
@@ -316,7 +316,7 @@ export function Home() {
 function StatusLine({ state }: { state: State }) {
   switch (state.kind) {
     case "idle":
-      return <span className="text-xs text-faint">a–z and 0–9, up to 30 characters</span>;
+      return <span className="text-xs text-faint">a-z and 0-9, up to 30 characters</span>;
     case "invalid":
       return <Pill tone="negative">Invalid · {state.reason}</Pill>;
     case "checking":

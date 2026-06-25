@@ -86,14 +86,14 @@ function MenuIcon({ className = "" }: IconProps) {
   );
 }
 
-/** The wordmark — a clean white book glyph + "wordsmash". Logo/font are fixed brand. */
+/** The wordmark — a clean white book glyph + "keepney". Logo/font are fixed brand. */
 function Logo() {
   return (
     <Link to="/" className="flex shrink-0 items-center gap-2">
       <svg viewBox="0 0 24 24" width="22" height="22" className="shrink-0 text-fg" fill="currentColor" aria-hidden="true">
         <path d="M11.25 4.533A9.7 9.7 0 0 0 6 3a9.7 9.7 0 0 0-3.25.555.75.75 0 0 0-.5.707v13.5a.75.75 0 0 0 1 .707A8.2 8.2 0 0 1 6 18c1.99 0 3.82.706 5.25 1.885V4.533ZM12.75 19.885A8.2 8.2 0 0 1 18 18c.96 0 1.89.165 2.75.47a.75.75 0 0 0 1-.708v-13.5a.75.75 0 0 0-.5-.707A9.7 9.7 0 0 0 18 3a9.7 9.7 0 0 0-5.25 1.533v15.352Z" />
       </svg>
-      <span className="font-display text-lg font-semibold tracking-tight">wordsmash</span>
+      <span className="font-display text-lg font-semibold tracking-tight">keepney</span>
     </Link>
   );
 }
@@ -145,7 +145,7 @@ function CreateButton({ onNavigate }: { onNavigate?: () => void }) {
     <Link
       to="/"
       onClick={onNavigate}
-      className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-[#06182e] transition hover:opacity-90 active:scale-[0.99]"
+      className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.99]"
       style={{ backgroundColor: "rgb(var(--c-volt))" }}
     >
       <PlusIcon className="h-4 w-4" />
@@ -217,7 +217,7 @@ export function Layout() {
           <Link to="/legal" className="hover:text-fg">
             Terms &amp; risk
           </Link>
-          <span>wordsmash · one word, one owner</span>
+          <span>keepney · one word, one owner</span>
         </div>
       </aside>
 

@@ -27,6 +27,8 @@ import {
   demoActivity,
   demoWordDetail,
   demoComments,
+  demoIsOwner,
+  demoProfile,
 } from "./demo";
 
 async function get<T>(path: string): Promise<T> {
@@ -121,7 +123,14 @@ export const api = {
   chart: (word: string) => getList<PricePoint>(`/word/${encodeURIComponent(word)}/chart`),
 
   /** GET /profile/:address -> meta + owned words, listings, activity, stats. */
-  profile: (address: string) => get<Profile>(`/profile/${normAddr(address)}`),
+  profile: async (address: string): Promise<Profile> => {
+    try {
+      return await get<Profile>(`/profile/${normAddr(address)}`);
+    } catch (e) {
+      if (DEMO && demoIsOwner(address)) return demoProfile(address);
+      throw e;
+    }
+  },
 
   /** GET /words?sort=... -> a single page of words. Returns the paginated envelope. */
   wordsPage: (sort?: WordSort, cursor?: string) => {
@@ -163,7 +172,23 @@ export const api = {
   },
 
   /** GET /search?q= -> matching words and users. */
-  search: (q: string) => get<SearchResult>(`/search?q=${encodeURIComponent(q)}`),
+  search: async (q: string): Promise<SearchResult> => {
+    let r: SearchResult;
+    try {
+      r = await get<SearchResult>(`/search?q=${encodeURIComponent(q)}`);
+    } catch (e) {
+      if (!DEMO) throw e;
+      r = { words: [], users: [] };
+    }
+    if (!DEMO || r.words.length) return r;
+    const ql = q.trim().toLowerCase();
+    if (!ql) return r;
+    const words = demoWords()
+      .filter((w) => w.word.includes(ql))
+      .slice(0, 8)
+      .map((w) => ({ word: w.word, tokenId: w.tokenId, owner: w.owner }));
+    return words.length ? { ...r, words } : r;
+  },
 
   /** GET /u/:username -> the profile that owns a username (for username routing). */
   userByName: (username: string) => get<Profile>(`/u/${encodeURIComponent(username)}`),

@@ -22,6 +22,7 @@ import { ShareButton } from "../components/ShareButton";
 import { WhitelistGate } from "../components/WhitelistGate";
 import { WatchButton } from "../components/WatchButton";
 import { Comments } from "../components/Comments";
+import { demoHasWord } from "../demo";
 import { WordMarketPanel } from "../components/market/WordMarketPanel";
 import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
@@ -58,6 +59,9 @@ export function Word() {
 
   const owner = detail?.owner ?? null;
   const listing = detail?.listing ?? null;
+  // Demo words are registered-only (no on-chain deed/market). Suppress every on-chain
+  // action surface for them so the illusion never offers a buy/list/watch that can't work.
+  const isDemo = Boolean(detail) && detail?.market == null && demoHasWord(word);
   const isOwner =
     Boolean(address) && Boolean(owner) && normAddr(address) === normAddr(owner);
 
@@ -88,7 +92,7 @@ export function Word() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {tokenId !== null && <WatchButton tokenId={tokenId.toString()} />}
+            {tokenId !== null && !isDemo && <WatchButton tokenId={tokenId.toString()} />}
             <ShareButton word={display} variant="ghost" />
           </div>
         </div>
@@ -135,6 +139,7 @@ export function Word() {
       {/* Deed marketplace — buy/sell the 1-of-1 word deed (the NFT itself). */}
       {owner &&
         tokenId !== null &&
+        !isDemo &&
         ((isConnected && !wrongNetwork) || listing?.active) && (
           <section className="mt-12 max-w-xl">
             <h2 className="mb-3 text-sm font-medium text-muted">Deed marketplace</h2>

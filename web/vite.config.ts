@@ -9,6 +9,18 @@ const sharedRoot = path.resolve(dir, "../shared");
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the heavy web3 stack off the app/vendor code so the shell paints sooner
+        // and the chunks cache independently across deploys.
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          web3: ["wagmi", "viem", "@tanstack/react-query"],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@shared": sharedSrc,

@@ -40,7 +40,7 @@ export function SmashTicker() {
     queryKey: ["activity", "ticker"],
     queryFn: api.activity,
     retry: 1,
-    refetchInterval: 5_000,
+    refetchInterval: 10_000,
   });
 
   const rows = (data ?? []).slice(0, 24);

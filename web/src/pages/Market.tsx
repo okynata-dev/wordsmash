@@ -46,7 +46,7 @@ export function Market() {
   return (
     <div>
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Market</h1>
         <div className="flex items-center gap-1 text-sm">
           <SortTab active={sort === "recent"} onClick={() => setSort("recent")}>
             Recent
@@ -172,7 +172,7 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
         </div>
         {sellerBlocked && !isSeller && (
           <p role="status" className="text-xs text-warning">
-            Seller not whitelisted — can’t settle.
+            Seller not whitelisted. Can’t settle.
           </p>
         )}
       </div>

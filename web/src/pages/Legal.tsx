@@ -9,17 +9,17 @@ const SECTIONS: { h: string; body: string }[] = [
   {
     h: "Experimental software, provided “as is”",
     body:
-      "wordsmash is experimental, unaudited-by-third-parties software offered without warranty of any kind. It may contain bugs, fail, or behave unexpectedly. You use it entirely at your own risk.",
+      "Keepney is experimental, unaudited-by-third-parties software offered without warranty of any kind. It may contain bugs, fail, or behave unexpectedly. You use it entirely at your own risk.",
   },
   {
     h: "This is a testnet",
     body:
-      "wordsmash currently runs on the Base Sepolia test network. Test tokens and test ETH have no monetary value and are for evaluation only. Nothing here is a live financial product.",
+      "Keepney currently runs on the Base Sepolia test network. Test tokens and test ETH have no monetary value and are for evaluation only. Nothing here is a live financial product.",
   },
   {
     h: "Not financial advice",
     body:
-      "Nothing on wordsmash is investment, financial, legal, or tax advice, nor an offer or solicitation to buy or sell any asset. Do your own research and consult a qualified professional before making decisions.",
+      "Nothing on Keepney is investment, financial, legal, or tax advice, nor an offer or solicitation to buy or sell any asset. Do your own research and consult a qualified professional before making decisions.",
   },
   {
     h: "Risk of total loss",
@@ -32,9 +32,9 @@ const SECTIONS: { h: string; body: string }[] = [
       "The contracts are immutable code on a public blockchain. Despite testing, code can contain vulnerabilities. A professional audit is planned before mainnet; until then, treat every interaction as experimental.",
   },
   {
-    h: "Non-custodial — you control your keys",
+    h: "Non-custodial. You control your keys",
     body:
-      "wordsmash never holds your funds or private keys. You alone are responsible for your wallet and its security. On-chain transactions are final and cannot be reversed, cancelled, or refunded by anyone.",
+      "Keepney never holds your funds or private keys. You alone are responsible for your wallet and its security. On-chain transactions are final and cannot be reversed, cancelled, or refunded by anyone.",
   },
   {
     h: "Words & ownership",
@@ -44,12 +44,12 @@ const SECTIONS: { h: string; body: string }[] = [
   {
     h: "Eligibility",
     body:
-      "By using wordsmash you confirm you are at least 18, that doing so is legal where you live, and that you are not a sanctioned person or located in a restricted jurisdiction.",
+      "By using Keepney you confirm you are at least 18, that doing so is legal where you live, and that you are not a sanctioned person or located in a restricted jurisdiction.",
   },
   {
     h: "Privacy",
     body:
-      "Blockchain activity (addresses, claims, trades) is inherently public and permanent. If you join a waitlist you provide a contact handle voluntarily; we use it only to reach you about wordsmash.",
+      "Blockchain activity (addresses, claims, trades) is inherently public and permanent. If you join a waitlist you provide a contact handle voluntarily; we use it only to reach you about Keepney.",
   },
   {
     h: "Changes",
@@ -62,10 +62,7 @@ export function Legal() {
   return (
     <div className="mx-auto max-w-[680px]">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Terms &amp; risk</h1>
-      <p className="mt-2 text-sm text-muted">
-        Plain-language summary of what wordsmash is — and the risks of using it. Read it before you
-        claim or trade.
-      </p>
+      <p className="mt-2 text-sm text-muted">Read this before you claim or trade.</p>
 
       <div className="mt-8 space-y-6">
         {SECTIONS.map((s) => (
@@ -77,10 +74,10 @@ export function Legal() {
       </div>
 
       <p className="mt-10 border-t border-border pt-5 text-xs text-faint">
-        By using wordsmash you acknowledge you have read and understood the above. This page is a
+        By using Keepney you acknowledge you have read and understood the above. This page is a
         good-faith risk disclosure, not legal advice.{" "}
         <Link to="/" className="underline hover:text-fg">
-          Back to wordsmash
+          Back to Keepney
         </Link>
       </p>
     </div>

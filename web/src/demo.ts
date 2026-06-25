@@ -3,7 +3,7 @@
 // activity exists. Gated by VITE_DEMO_MODE; only fills surfaces that are EMPTY for
 // real (the moment real words/comments exist, real data wins). NO fake trades or
 // prices — these are registered words (market: null), matching "just claimed".
-import type { WordRow, WordDetail, ActivityRow, Stats } from "@shared/types";
+import type { WordRow, WordDetail, ActivityRow, Stats, Profile } from "@shared/types";
 import type { Comment } from "@shared/social";
 import { DEMO_MODE } from "./config";
 
@@ -49,11 +49,17 @@ const USERS = [
   "gm_ser", "vibe_dealer", "onchain_ous", "frenly", "smash_god",
 ];
 
+// One handle per demo owner (parallel to A), so owner profiles read as real people.
+const OWNER_NAMES = [
+  "satoshi", "degenmike", "wordlord", "based_anon",
+  "alpha_seeker", "gm_ser", "vibe_dealer", "onchain_ous",
+];
+
 const SAYINGS = [
   (w: string) => `gm to every "${w}" believer`,
-  (w: string) => `imagine not owning "${w}" — couldn't be me`,
+  (w: string) => `imagine not owning "${w}", couldn't be me`,
   (w: string) => `"${w}" is the only word that matters tbh`,
-  (w: string) => `wish i smashed "${w}" first 😤`,
+  (w: string) => `wish i kept "${w}" first 😤`,
   (w: string) => `one word, one owner. "${w}" is forever now`,
   (w: string) => `how much for "${w}"? name your price`,
   (w: string) => `this is the alpha. "${w}" holders eating good`,
@@ -153,4 +159,37 @@ export function demoComments(word: string): Comment[] {
 
 function o(i: number): number {
   return W[i][1];
+}
+
+/** True when an address is one of the demo owners (so we can synthesize its profile). */
+export function demoIsOwner(addr: string): boolean {
+  if (!DEMO) return false;
+  const a = addr.toLowerCase();
+  return A.some((x) => x.toLowerCase() === a);
+}
+
+/** Synthesize a demo owner's profile (their words + claim activity) so badges link cleanly. */
+export function demoProfile(addr: string): Profile {
+  const a = addr.toLowerCase();
+  const idx = A.findIndex((x) => x.toLowerCase() === a);
+  const checksum = idx >= 0 ? A[idx] : addr;
+  const owned = demoWords().filter((w) => w.owner.toLowerCase() === a);
+  const activity = demoActivity().filter((x) => x.address.toLowerCase() === a);
+  return {
+    address: checksum,
+    meta: {
+      address: checksum,
+      username: idx >= 0 ? OWNER_NAMES[idx] : null,
+      bio: "collecting words on Keepney",
+      avatarUrl: null,
+      twitterHandle: null,
+      twitterVerified: false,
+      website: null,
+      updatedAt: null,
+    },
+    owned,
+    listings: [],
+    activity,
+    stats: { owned: owned.length, volumeWei: "0" },
+  };
 }

@@ -26,7 +26,7 @@ export function ShareButton({
     // Prefer the native share sheet on supporting (mobile) browsers.
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({ title: `wordsmash — ${word}`, text, url });
+        await navigator.share({ title: `keepney: ${word}`, text, url });
         return;
       } catch {
         // user cancelled or unsupported payload -> fall through
@@ -45,7 +45,7 @@ export function ShareButton({
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard");
     } catch {
-      toast.error("Couldn't share — copy the URL manually");
+      toast.error("Couldn't share. Copy the URL manually.");
     }
   }
 

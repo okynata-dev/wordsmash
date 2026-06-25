@@ -1,14 +1,8 @@
 import { createConfig, http } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
-import { injected, walletConnect } from "wagmi/connectors";
+import { injected } from "wagmi/connectors";
 import { defineChain } from "viem";
-import {
-  ANVIL_CHAIN_ID,
-  ANVIL_RPC,
-  BASE_SEPOLIA_RPC,
-  USE_ANVIL,
-  WALLETCONNECT_PROJECT_ID,
-} from "./config";
+import { ANVIL_CHAIN_ID, ANVIL_RPC, BASE_SEPOLIA_RPC, USE_ANVIL } from "./config";
 
 // Local anvil chain for dev (id 31337).
 export const anvil = defineChain({
@@ -25,18 +19,11 @@ export const anvil = defineChain({
 // The chain this build targets (one active chain at a time, chosen by env flag).
 export const activeChain = USE_ANVIL ? anvil : baseSepolia;
 
-const connectors = [
-  injected(),
-  // walletConnect only when a project id is supplied (HUMAN TASK to provide one).
-  ...(WALLETCONNECT_PROJECT_ID
-    ? [
-        walletConnect({
-          projectId: WALLETCONNECT_PROJECT_ID,
-          showQrModal: true,
-        }),
-      ]
-    : []),
-];
+// Injected-only (MetaMask/Coinbase/Rabby/etc.). WalletConnect is intentionally NOT
+// statically imported — its Web3Modal graph is ~420kB and ships even when disabled.
+// To re-enable mobile/QR later: set VITE_WALLETCONNECT_PROJECT_ID and add the connector
+// via a dynamic `import("wagmi/connectors")` so the heavy code only loads when used.
+const connectors = [injected()];
 
 export const wagmiConfig = createConfig({
   chains: USE_ANVIL ? [anvil] : [baseSepolia],

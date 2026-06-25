@@ -23,7 +23,7 @@
   --c-warning: 146 64 14;
 
   /*
-    Display typeface — the wordsmash wordmark's font, pinned here so the logo (and
+    Display typeface — the keepney wordmark's font, pinned here so the logo (and
     the headings that share it) render identically across rebuilds even if the
     body `sans` stack is ever retuned. Do not change this without changing the logo.
   */
@@ -286,17 +286,25 @@ body {
   reduced-motion gated. This is the dopamine layer that works with ZERO data.
 */
 :root {
-  /* Brand accent — a soft, gentle blue (not acid, not dark). The identity colour:
-     the Create button, the live word, glows, and accent hovers all draw from this. */
-  --c-volt: 74 144 226;
+  /* Brand accent — pure electric blue (#0000FF). Bold, saturated identity used on
+     the Create button, the live word, glows and accent hovers. Buttons carry WHITE
+     text on this fill (dark text would vanish on pure blue). */
+  --c-volt: 0 0 255;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --c-volt: 125 178 240;
+    --c-volt: 0 0 255;
   }
 }
 .text-volt {
   color: rgb(var(--c-volt));
+}
+
+/* Keyboard focus ring — every interactive element, token-driven, no mouse-focus noise. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--c-volt));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* Live word slams in on every keystroke. */

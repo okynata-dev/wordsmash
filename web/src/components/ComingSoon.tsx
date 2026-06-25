@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const HOST = "wordsmash.pages.dev";
+const HOST = "keepney.com";
 
 /** Same normalization as the claim flow: a–z0–9, max 30. */
 function normalize(s: string): string {
@@ -80,7 +80,7 @@ export function ComingSoon() {
   return (
     <div className="flex min-h-screen flex-col bg-bg text-fg">
       <header className="px-6 py-5">
-        <span className="text-lg font-semibold tracking-tight">wordsmash</span>
+        <span className="text-lg font-semibold tracking-tight">keepney</span>
       </header>
 
       <main className="mx-auto flex w-full max-w-[620px] flex-1 flex-col items-center justify-center px-6 pb-24 text-center">
@@ -141,7 +141,7 @@ export function ComingSoon() {
         ) : (
           <div className="fade-up mt-9 flex w-full max-w-[440px] flex-col items-center gap-4">
             <p className="text-base text-muted">
-              Be first to claim <span className="font-medium text-fg">“{word}”</span> when wordsmash opens.
+              Be first to claim <span className="font-medium text-fg">“{word}”</span> when keepney opens.
             </p>
             <form
               onSubmit={(e) => {

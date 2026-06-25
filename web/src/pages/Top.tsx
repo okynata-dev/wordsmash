@@ -75,9 +75,6 @@ export function Top() {
     <div className="mx-auto max-w-[920px]">
       <div className="fade-up mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Top words</h1>
-        <p className="mt-2 text-sm text-muted">
-          Ranked by token-market volume across the launchpad.
-        </p>
       </div>
 
       <div className="mb-10 grid grid-cols-2 gap-3 sm:grid-cols-4">

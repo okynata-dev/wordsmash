@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 
-const BASE = "wordsmash";
+const BASE = "keepney";
 
 /**
- * Sets `document.title` to "<title> · wordsmash" (or just "wordsmash" when empty),
+ * Sets `document.title` to "<title> · keepney" (or just "keepney" when empty),
  * and restores the base title on unmount so a stale per-page title never lingers
  * after navigating away. Improves browser tabs, bookmarks and link previews.
  */

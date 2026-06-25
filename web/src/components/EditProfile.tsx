@@ -41,7 +41,7 @@ async function fileToAvatarDataUrl(file: File): Promise<string> {
     const bytes = Math.ceil((url.length - url.indexOf(",") - 1) * 0.75);
     if (bytes <= AVATAR_MAX_BYTES) return url;
   }
-  throw new Error("Image too large after compression — try a smaller picture.");
+  throw new Error("Image too large after compression. Try a smaller picture.");
 }
 
 export function EditProfile({
@@ -125,7 +125,7 @@ export function EditProfile({
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status === 409) {
-        setError("That username is already taken — pick another.");
+        setError("That username is already taken. Pick another.");
       } else {
         setError(friendlyError(err));
       }
@@ -177,7 +177,7 @@ export function EditProfile({
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="Username" htmlFor={ids.username} hint="3–20 chars · a–z, 0–9, _">
+        <Field label="Username" htmlFor={ids.username} hint="3-20 chars, a-z, 0-9, _">
           <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-fg/40">
             <span className="text-sm text-faint">@</span>
             <input

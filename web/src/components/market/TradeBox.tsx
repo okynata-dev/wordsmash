@@ -68,7 +68,7 @@ export function TradeBox({
               aria-selected={tab === t}
               disabled={disabled}
               onClick={() => !disabled && setTab(t)}
-              title={disabled ? "Buys are frozen — this market has graduated" : undefined}
+              title={disabled ? "Buys are frozen. This market has graduated." : undefined}
               className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition disabled:cursor-not-allowed disabled:opacity-40 ${
                 tab === t ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg"
               }`}
@@ -83,7 +83,7 @@ export function TradeBox({
         buyFrozen ? (
           <div className="rounded-lg bg-surface-2 p-5 text-center text-sm text-muted">
             This market has <span className="font-medium text-fg">graduated 🎓</span>. Buys are
-            frozen — you can still sell your {symbol ? `$${symbol}` : "tokens"}.
+            frozen. You can still sell your {symbol ? `$${symbol}` : "tokens"}.
           </div>
         ) : (
           <BuyPanel
