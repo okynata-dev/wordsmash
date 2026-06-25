@@ -33,3 +33,6 @@ web/.vite/
 
 # throwaway demo-seed actor keys (testnet)
 contracts/.seed-actors.env
+
+# wrangler build/deploy temp
+web/.wrangler/
