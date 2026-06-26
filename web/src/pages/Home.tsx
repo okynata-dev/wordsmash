@@ -182,10 +182,11 @@ export function Home() {
       {/* SMASH hero — the page leads with energy, not data. The typed word slams in
           on every keystroke; claiming fires a particle burst + impact shake. */}
       <section className={`fade-up mb-10 ${shake ? "smash-shake" : ""}`}>
-        <h1 className="font-display text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
-          Keep a word. <span className="text-muted">Own it forever.</span>
+        <h1 className="font-display text-balance text-[30px] font-semibold leading-[1.05] tracking-tight sm:text-[40px]">
+          Keep a <span className="text-volt">word</span>.{" "}
+          <span className="text-muted">Own it forever.</span>
         </h1>
-        <p className="mt-1.5 text-sm text-muted">
+        <p className="mt-2 text-[15px] text-muted">
           One word, one owner. You earn every time it trades.
         </p>
 
@@ -407,19 +408,16 @@ function SmashBurst({ fireKey }: { fireKey: number }) {
 /** "Free words, waiting" — tapping one smashes it straight into the hero input. */
 function SuggestionChips({ onPick }: { onPick: (w: string) => void }) {
   return (
-    <div className="mt-5">
-      <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-faint">free words, waiting</p>
-      <div className="flex flex-wrap gap-1.5">
-        {SMASH_SUGGESTIONS.map((w) => (
-          <button
-            key={w}
-            onClick={() => onPick(w)}
-            className="rounded-full border border-border bg-surface px-3 py-1 text-sm text-muted transition hover:border-[rgb(var(--c-volt))] hover:text-[rgb(var(--c-volt))]"
-          >
-            {w}
-          </button>
-        ))}
-      </div>
+    <div className="mt-4 flex flex-wrap gap-1.5">
+      {SMASH_SUGGESTIONS.map((w) => (
+        <button
+          key={w}
+          onClick={() => onPick(w)}
+          className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-muted transition hover:border-[rgb(var(--c-volt))] hover:text-fg"
+        >
+          {w}
+        </button>
+      ))}
     </div>
   );
 }

@@ -99,6 +99,7 @@ export function WalletButton() {
     const connector = connectors[0];
     return (
       <Button
+        className="!border-transparent !bg-[rgb(var(--c-volt))] !text-white"
         onClick={() =>
           connector &&
           connect(
@@ -116,6 +117,7 @@ export function WalletButton() {
   return (
     <div className="relative" ref={ref}>
       <Button
+        className="!border-transparent !bg-[rgb(var(--c-volt))] !text-white"
         onClick={() => setOpen((o) => !o)}
         disabled={isPending}
         aria-expanded={open}
