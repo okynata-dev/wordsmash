@@ -458,9 +458,9 @@ function WordGrid() {
             <Link
               key={w.tokenId}
               to={`/word/${encodeURIComponent(w.word)}`}
-              className="card-lift flex flex-col justify-between rounded-xl border border-border bg-surface p-4 transition"
+              className="card-lift flex flex-col justify-between rounded-xl border border-border bg-surface p-4 transition hover:!border-[rgb(var(--c-volt))]"
             >
-              <span className="word-display truncate text-2xl">{w.word}</span>
+              <span className="word-display truncate text-[26px]">{w.word}</span>
               <span className="mt-3 flex items-center justify-between gap-2 text-xs text-muted">
                 <UserBadge address={w.owner} size={18} link={false} textClassName="text-xs" />
                 <span className="shrink-0 tabular-nums text-faint">{timeAgo(w.claimedAt)}</span>
