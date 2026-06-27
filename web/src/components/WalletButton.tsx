@@ -34,7 +34,8 @@ function useDropdown() {
   return { open, setOpen, ref, id };
 }
 
-export function WalletButton() {
+export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}) {
+  const w = fullWidth ? "w-full " : "";
   const { address, isConnected } = useAccount();
   const { connectors, connect, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -47,6 +48,7 @@ export function WalletButton() {
     return (
       <Button
         variant="outline"
+        className={w}
         onClick={() =>
           switchChain(
             { chainId: activeChain.id },
@@ -99,7 +101,7 @@ export function WalletButton() {
     const connector = connectors[0];
     return (
       <Button
-        className="!border-transparent !bg-[rgb(var(--c-volt))] !text-white"
+        className={`${w}!border-transparent !bg-[rgb(var(--c-volt))] !text-white`}
         onClick={() =>
           connector &&
           connect(

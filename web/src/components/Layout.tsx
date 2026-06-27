@@ -275,14 +275,43 @@ export function Layout() {
 
         <SmashTicker />
 
-        <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-8 sm:px-6">
+        <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 pt-8 pb-24 sm:px-6 md:pb-8">
           <ErrorBoundary key={location.pathname}>
             <Outlet />
           </ErrorBoundary>
         </main>
       </div>
 
+      <BottomNav />
       <WelcomeModal />
     </div>
+  );
+}
+
+/** Mobile bottom tab bar — the primary nav on phones (sidebar is desktop-only). */
+function BottomNav() {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-bg/95 backdrop-blur md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      aria-label="Primary"
+    >
+      {navItems.map(({ to, end, label, Icon }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          className={({ isActive }) =>
+            [
+              "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition",
+              isActive ? "text-[rgb(var(--c-volt))]" : "text-muted",
+            ].join(" ")
+          }
+        >
+          <Icon className="h-[22px] w-[22px]" />
+          {label}
+        </NavLink>
+      ))}
+    </nav>
   );
 }

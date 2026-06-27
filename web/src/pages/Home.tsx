@@ -19,12 +19,7 @@ import { useToast } from "../components/Toast";
 import { friendlyError, ethLabel, timeAgo } from "../lib/format";
 import { useCountUp } from "../hooks/useCountUp";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
-import {
-  useClaimFee,
-  useMaxClaims,
-  useRemainingClaims,
-  useWrongNetwork,
-} from "../hooks/useRegistry";
+import { useClaimFee, useRemainingClaims, useWrongNetwork } from "../hooks/useRegistry";
 
 type State =
   | { kind: "idle" }
@@ -59,7 +54,6 @@ export function Home() {
     refetchInterval: 10_000,
   });
   const { data: claimFee } = useClaimFee();
-  const { data: maxClaims } = useMaxClaims();
   const { data: remaining, refetch: refetchRemaining } = useRemainingClaims(address);
   const { sync, syncing } = useSyncAfterTx();
 
@@ -151,7 +145,7 @@ export function Home() {
   const claimAction = (
     <WhitelistGate compact>
       <Button
-        className="shrink-0 !bg-[rgb(var(--c-volt))] !text-white volt-glow"
+        className="w-full !bg-[rgb(var(--c-volt))] !text-white volt-glow"
         onClick={doClaim}
         disabled={
           state.kind !== "available" ||
@@ -200,86 +194,83 @@ export function Home() {
           </div>
         )}
 
-        <div
-          className={`relative mt-4 flex max-w-[560px] items-center gap-2 rounded-xl border bg-surface p-2 pl-4 shadow-sm transition ${
-            state.kind === "available" ? "border-transparent volt-glow" : "border-border"
-          }`}
-        >
-          <SmashBurst fireKey={burstKey} />
-          <label htmlFor="claim-word-input" className="sr-only">
-            Word to claim
-          </label>
-          <input
-            id="claim-word-input"
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter claims when the happy path is satisfied (mirrors the button's
-              // enabled state); whitelist edge cases still surface via the toast.
-              if (
-                e.key === "Enter" &&
-                state.kind === "available" &&
-                isConnected &&
-                !wrongNetwork &&
-                !outOfClaims &&
-                claimFee !== undefined &&
-                !isPending &&
-                !confirming &&
-                !syncing
-              ) {
-                doClaim();
-              }
-            }}
-            placeholder="type a word"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            aria-describedby="claim-status"
-            className="word-display caret-fg min-w-0 flex-1 bg-transparent text-xl outline-none placeholder:text-faint focus:placeholder:text-transparent sm:text-2xl"
-          />
-          {!isConnected || wrongNetwork ? <WalletButton /> : claimAction}
+        <div className="mt-5 max-w-[460px]">
+          <div
+            className={`relative flex items-center rounded-xl border bg-surface px-4 py-3.5 shadow-sm transition ${
+              state.kind === "available" ? "border-transparent volt-glow" : "border-border"
+            }`}
+          >
+            <SmashBurst fireKey={burstKey} />
+            <label htmlFor="claim-word-input" className="sr-only">
+              Word to claim
+            </label>
+            <input
+              id="claim-word-input"
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter claims when the happy path is satisfied (mirrors the button).
+                if (
+                  e.key === "Enter" &&
+                  state.kind === "available" &&
+                  isConnected &&
+                  !wrongNetwork &&
+                  !outOfClaims &&
+                  claimFee !== undefined &&
+                  !isPending &&
+                  !confirming &&
+                  !syncing
+                ) {
+                  doClaim();
+                }
+              }}
+              placeholder="type a word…"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-describedby="claim-status"
+              className="word-display caret-fg w-full bg-transparent text-xl outline-none placeholder:text-faint focus:placeholder:text-transparent"
+            />
+          </div>
+
+          <div
+            id="claim-status"
+            role="status"
+            aria-live="polite"
+            className="mt-2 flex min-h-[1.25rem] items-center"
+          >
+            <StatusLine state={state} />
+          </div>
+
+          <div className="mt-2">
+            {!isConnected || wrongNetwork ? <WalletButton fullWidth /> : claimAction}
+          </div>
+
+          {isConnected && outOfClaims && (
+            <p className="mt-2 text-xs text-warning">
+              You&apos;ve hit the claim limit for this wallet.
+            </p>
+          )}
+
+          <p className="mt-2 text-[11px] text-faint">
+            By keeping a word you agree to the{" "}
+            <Link to="/legal" className="underline hover:text-fg">
+              terms &amp; risk
+            </Link>
+            .
+          </p>
         </div>
 
-        <div
-          id="claim-status"
-          role="status"
-          aria-live="polite"
-          className="mt-2.5 flex min-h-[1.75rem] items-center"
-        >
-          <StatusLine state={state} />
-        </div>
-
-        {isConnected && outOfClaims && (
-          <p className="mt-1 text-xs text-warning">
-            You&apos;ve hit the claim limit for this wallet.
-          </p>
-        )}
-        {isConnected && (
-          <p className="mt-1 text-xs text-faint">
-            {remainingNum !== undefined && maxClaims !== undefined
-              ? `${remainingNum} of ${Number(maxClaims)} claims remaining for this wallet`
-              : "Claims are limited per wallet to keep things fair."}
-          </p>
-        )}
-
-        <p className="mt-3 text-xs text-faint">
-          By keeping a word you agree to the{" "}
-          <Link to="/legal" className="underline hover:text-fg">
-            terms &amp; risk
-          </Link>
-          .
-        </p>
-
-        {/* Alive empty-state: real claimable words, one tap from smashing into the hero. */}
+        {/* Alive empty-state: real claimable words, one swipe of suggestions. */}
         <SuggestionChips onPick={(w) => setRaw(w)} />
       </section>
 
-      {/* Slim social proof — only when there's real data; never a deflating 0/0. */}
+      {/* Slim social proof — one quiet line, no heavy dividers. */}
       {stats && stats.wordsClaimed > 0 ? (
-        <div className="fade-up mb-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 border-y border-border py-4">
+        <div className="fade-up mb-9 mt-9 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted">
           <Counter
             value={stats.wordsClaimed}
-            label="words claimed"
+            label="claimed"
             error={statsError}
             onRetry={() => void refetchStats()}
           />
@@ -289,12 +280,10 @@ export function Home() {
             error={statsError}
             onRetry={() => void refetchStats()}
           />
-          <span className="font-display text-sm text-muted">each word claimed once, never again</span>
+          <span>each claimed once, forever</span>
         </div>
       ) : (
-        <p className="fade-up mb-10 border-y border-border py-4 text-center font-display text-sm text-muted">
-          each word claimed once, never again
-        </p>
+        <p className="fade-up mb-9 mt-9 text-sm text-muted">each word claimed once, forever</p>
       )}
 
       {/* The buzz — a live wall of claimed words. */}
@@ -317,7 +306,7 @@ export function Home() {
 function StatusLine({ state }: { state: State }) {
   switch (state.kind) {
     case "idle":
-      return <span className="text-xs text-faint">a-z and 0-9, up to 30 characters</span>;
+      return null;
     case "invalid":
       return <Pill tone="negative">Invalid · {state.reason}</Pill>;
     case "checking":
@@ -408,12 +397,12 @@ function SmashBurst({ fireKey }: { fireKey: number }) {
 /** "Free words, waiting" — tapping one smashes it straight into the hero input. */
 function SuggestionChips({ onPick }: { onPick: (w: string) => void }) {
   return (
-    <div className="mt-4 flex flex-wrap gap-1.5">
+    <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {SMASH_SUGGESTIONS.map((w) => (
         <button
           key={w}
           onClick={() => onPick(w)}
-          className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-muted transition hover:border-[rgb(var(--c-volt))] hover:text-fg"
+          className="shrink-0 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-muted transition hover:border-[rgb(var(--c-volt))] hover:text-fg"
         >
           {w}
         </button>
