@@ -216,7 +216,6 @@ export function Layout() {
           <Link to="/legal" className="hover:text-fg">
             Terms &amp; risk
           </Link>
-          <span>keepney · one word, one owner</span>
         </div>
       </aside>
 
