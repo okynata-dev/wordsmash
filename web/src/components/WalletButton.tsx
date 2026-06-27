@@ -111,7 +111,7 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
         }
         disabled={isPending || !connector}
       >
-        {isPending ? "Connecting…" : "Connect wallet"}
+        {isPending ? "Signing in…" : "Sign in"}
       </Button>
     );
   }
@@ -126,7 +126,7 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
         aria-controls={id}
         aria-haspopup="menu"
       >
-        {isPending ? "Connecting…" : "Connect wallet"}
+        {isPending ? "Signing in…" : "Sign in"}
       </Button>
       {open && (
         <div
