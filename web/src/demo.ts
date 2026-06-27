@@ -46,7 +46,7 @@ const W: [string, number, number][] = [
 
 const USERS = [
   "satoshi", "degenmike", "wordlord", "based_anon", "alpha_seeker",
-  "gm_ser", "vibe_dealer", "onchain_ous", "frenly", "smash_god",
+  "gm_ser", "vibe_dealer", "onchain_ous", "frenly", "the_keeper",
 ];
 
 // One handle per demo owner (parallel to A), so owner profiles read as real people.
@@ -151,7 +151,7 @@ export function demoComments(word: string): Comment[] {
       author: A[(o(i) + k) % A.length],
       authorMeta: { username: USERS[uIdx], avatarUrl: null },
       body: SAYINGS[sIdx](slug),
-      ts: now - (k * 1800 + 600),
+      ts: Date.now() - (k * 1800 + 600) * 1000,
     });
   }
   return out;
