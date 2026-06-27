@@ -93,7 +93,14 @@ export type WordSort = "recent" | "volume" | "trading" | "graduating";
 
 export const api = {
   /** GET /check/:word -> availability for the taken-state. */
-  check: (word: string) => get<CheckResult>(`/check/${encodeURIComponent(word)}`),
+  check: async (word: string): Promise<CheckResult> => {
+    const r = await get<CheckResult>(`/check/${encodeURIComponent(word)}`);
+    // Demo words read as "claimed" everywhere else, so the claim input must agree.
+    if (DEMO && r.valid && demoHasWord(r.normalized || word)) {
+      return { ...r, available: false, reason: "already claimed" };
+    }
+    return r;
+  },
 
   /** GET /stats -> global counters. */
   stats: async (): Promise<Stats> => {

@@ -251,9 +251,6 @@ export function Home() {
             </p>
           )}
         </div>
-
-        {/* Alive empty-state: real claimable words, one swipe of suggestions. */}
-        <SuggestionChips onPick={(w) => setRaw(w)} />
       </section>
 
       {/* The buzz — a live wall of claimed words. */}
@@ -292,12 +289,6 @@ function StatusLine({ state }: { state: State }) {
   }
 }
 
-/** Curated, genuinely-claimable words — the empty-state has energy, not zeros. */
-const SMASH_SUGGESTIONS = [
-  "base", "degen", "gm", "alpha", "moon", "wagmi",
-  "onchain", "based", "frens", "lfg", "vibe", "mint",
-];
-
 /**
  * Radial particle burst. Keyed by `fireKey` so each smash remounts it and replays
  * the animation from scratch. Particles fly out along evenly-spread vectors.
@@ -333,22 +324,6 @@ function SmashBurst({ fireKey }: { fireKey: number }) {
   );
 }
 
-/** "Free words, waiting" — tapping one smashes it straight into the hero input. */
-function SuggestionChips({ onPick }: { onPick: (w: string) => void }) {
-  return (
-    <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {SMASH_SUGGESTIONS.map((w) => (
-        <button
-          key={w}
-          onClick={() => onPick(w)}
-          className="shrink-0 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-muted transition hover:border-[rgb(var(--c-volt))] hover:text-fg"
-        >
-          {w}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /**
  * The buzz — a wall of recently-claimed words as cards (pump-style). Real
