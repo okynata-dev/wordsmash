@@ -3,7 +3,6 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { WalletButton } from "./WalletButton";
 import { SearchBox } from "./SearchBox";
-import { SmashTicker } from "./SmashTicker";
 import { WelcomeModal } from "./WelcomeModal";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { activeChain } from "../wagmi";
@@ -272,8 +271,6 @@ export function Layout() {
             </div>
           )}
         </header>
-
-        <SmashTicker />
 
         <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 pt-8 pb-24 sm:px-6 md:pb-8">
           <ErrorBoundary key={location.pathname}>

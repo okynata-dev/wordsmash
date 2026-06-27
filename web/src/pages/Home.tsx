@@ -17,7 +17,6 @@ import { DiscoveryBoard } from "../components/DiscoveryBoard";
 import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
 import { friendlyError, ethLabel, timeAgo } from "../lib/format";
-import { useCountUp } from "../hooks/useCountUp";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
 import { useClaimFee, useRemainingClaims, useWrongNetwork } from "../hooks/useRegistry";
 
@@ -47,12 +46,6 @@ export function Home() {
   const { address, isConnected } = useAccount();
   const wrongNetwork = useWrongNetwork();
 
-  const { data: stats, isError: statsError, refetch: refetchStats } = useQuery({
-    queryKey: ["stats"],
-    queryFn: api.stats,
-    retry: 1,
-    refetchInterval: 10_000,
-  });
   const { data: claimFee } = useClaimFee();
   const { data: remaining, refetch: refetchRemaining } = useRemainingClaims(address);
   const { sync, syncing } = useSyncAfterTx();
@@ -265,27 +258,6 @@ export function Home() {
         <SuggestionChips onPick={(w) => setRaw(w)} />
       </section>
 
-      {/* Slim social proof — one quiet line, no heavy dividers. */}
-      {stats && stats.wordsClaimed > 0 ? (
-        <div className="fade-up mb-9 mt-9 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted">
-          <Counter
-            value={stats.wordsClaimed}
-            label="claimed"
-            error={statsError}
-            onRetry={() => void refetchStats()}
-          />
-          <Counter
-            value={stats.uniqueOwners}
-            label="owners"
-            error={statsError}
-            onRetry={() => void refetchStats()}
-          />
-          <span>each claimed once, forever</span>
-        </div>
-      ) : (
-        <p className="fade-up mb-9 mt-9 text-sm text-muted">each word claimed once, forever</p>
-      )}
-
       {/* The buzz — a live wall of claimed words. */}
       <WordGrid />
 
@@ -320,37 +292,6 @@ function StatusLine({ state }: { state: State }) {
     case "taken":
       return <Pill tone="warning">“{state.normalized}” is taken</Pill>;
   }
-}
-
-/** Compact count-up stat for the slim social-proof strip. */
-function Counter({
-  value,
-  label,
-  error,
-  onRetry,
-}: {
-  value?: number;
-  label: string;
-  error?: boolean;
-  onRetry?: () => void;
-}) {
-  const animated = useCountUp(value);
-  const display =
-    error || value === undefined || animated === null ? "—" : Math.round(animated).toLocaleString();
-  return (
-    <div className="flex items-baseline gap-1.5">
-      <span className="font-display text-xl font-semibold tabular-nums">
-        {error ? (
-          <button onClick={onRetry} className="text-sm font-normal text-muted underline">
-            retry
-          </button>
-        ) : (
-          display
-        )}
-      </span>
-      <span className="text-[11px] uppercase tracking-[0.12em] text-faint">{label}</span>
-    </div>
-  );
 }
 
 /** Curated, genuinely-claimable words — the empty-state has energy, not zeros. */
