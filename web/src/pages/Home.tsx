@@ -11,6 +11,7 @@ import { api } from "../api";
 import { registryAddress, wordRegistryAbi } from "../contracts";
 import { Button, Card, Spinner, Pill, Skeleton, ErrorState } from "../components/ui";
 import { WhitelistGate } from "../components/WhitelistGate";
+import { useConnectModal } from "../components/ConnectModal";
 import { WalletButton } from "../components/WalletButton";
 import { LiveBadge } from "../components/ActivityFeed";
 import { DiscoveryBoard } from "../components/DiscoveryBoard";
@@ -45,6 +46,7 @@ export function Home() {
 
   const { address, isConnected } = useAccount();
   const wrongNetwork = useWrongNetwork();
+  const { open: openConnect } = useConnectModal();
 
   const { data: claimFee } = useClaimFee();
   const { data: remaining, refetch: refetchRemaining } = useRemainingClaims(address);
@@ -119,6 +121,10 @@ export function Home() {
 
   function doClaim() {
     if (state.kind !== "available") return;
+    if (!isConnected) {
+      openConnect(); // not signed in -> open the sign-in modal instead of claiming
+      return;
+    }
     fireSmash(); // instant tactile feedback on intent, before the wallet round-trip
     writeContract(
       {
@@ -236,7 +242,7 @@ export function Home() {
           </div>
 
           <div className="mt-2">
-            {!isConnected || wrongNetwork ? <WalletButton fullWidth /> : claimAction}
+            {isConnected && wrongNetwork ? <WalletButton fullWidth /> : claimAction}
           </div>
 
           {isConnected && outOfClaims && (
@@ -244,14 +250,6 @@ export function Home() {
               You&apos;ve hit the claim limit for this wallet.
             </p>
           )}
-
-          <p className="mt-2 text-[11px] text-faint">
-            By keeping a word you agree to the{" "}
-            <Link to="/legal" className="underline hover:text-fg">
-              terms &amp; risk
-            </Link>
-            .
-          </p>
         </div>
 
         {/* Alive empty-state: real claimable words, one swipe of suggestions. */}

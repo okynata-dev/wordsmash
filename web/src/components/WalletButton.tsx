@@ -1,15 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
-import {
-  useAccount,
-  useConnect,
-  useDisconnect,
-  useSwitchChain,
-} from "wagmi";
+import { useAccount, useDisconnect, useSwitchChain } from "wagmi";
 import { activeChain } from "../wagmi";
 import { Button } from "./ui";
 import { shortAddr, friendlyError } from "../lib/format";
 import { useWrongNetwork } from "../hooks/useRegistry";
 import { useToast } from "./Toast";
+import { useConnectModal } from "./ConnectModal";
 
 /** Dropdown wrapper with Esc + outside-click close and aria wiring. */
 function useDropdown() {
@@ -37,11 +33,11 @@ function useDropdown() {
 export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}) {
   const w = fullWidth ? "w-full " : "";
   const { address, isConnected } = useAccount();
-  const { connectors, connect, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: switching } = useSwitchChain();
   const wrongNetwork = useWrongNetwork();
   const toast = useToast();
+  const { open: openConnect } = useConnectModal();
   const { open, setOpen, ref, id } = useDropdown();
 
   if (isConnected && wrongNetwork) {
@@ -96,62 +92,13 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
     );
   }
 
-  // Not connected. If only one connector, connect directly; else show a menu.
-  if (connectors.length <= 1) {
-    const connector = connectors[0];
-    return (
-      <Button
-        className={`${w}!border-transparent !bg-[rgb(var(--c-volt))] !text-white`}
-        onClick={() =>
-          connector &&
-          connect(
-            { connector },
-            { onError: (e) => toast.error(friendlyError(e)) },
-          )
-        }
-        disabled={isPending || !connector}
-      >
-        {isPending ? "Signing in…" : "Sign in"}
-      </Button>
-    );
-  }
-
+  // Not connected -> open the global sign-in modal (dimmed backdrop, wallet list).
   return (
-    <div className="relative" ref={ref}>
-      <Button
-        className="!border-transparent !bg-[rgb(var(--c-volt))] !text-white"
-        onClick={() => setOpen((o) => !o)}
-        disabled={isPending}
-        aria-expanded={open}
-        aria-controls={id}
-        aria-haspopup="menu"
-      >
-        {isPending ? "Signing in…" : "Sign in"}
-      </Button>
-      {open && (
-        <div
-          id={id}
-          role="menu"
-          className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-border bg-surface p-1 shadow-md"
-        >
-          {connectors.map((c) => (
-            <button
-              key={c.uid}
-              role="menuitem"
-              className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-surface-2"
-              onClick={() => {
-                connect(
-                  { connector: c },
-                  { onError: (e) => toast.error(friendlyError(e)) },
-                );
-                setOpen(false);
-              }}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Button
+      className={`${w}!border-transparent !bg-[rgb(var(--c-volt))] !text-white`}
+      onClick={openConnect}
+    >
+      Sign in
+    </Button>
   );
 }

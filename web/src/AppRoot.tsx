@@ -4,6 +4,7 @@ import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig } from "./wagmi";
 import { ToastProvider } from "./components/Toast";
+import { ConnectModalProvider } from "./components/ConnectModal";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { App } from "./App";
 
@@ -29,9 +30,11 @@ export function AppRoot() {
         <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
+              <ConnectModalProvider>
+                <BrowserRouter>
+                  <App />
+                </BrowserRouter>
+              </ConnectModalProvider>
             </ToastProvider>
           </QueryClientProvider>
         </WagmiProvider>
