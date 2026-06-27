@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 /**
  * Terms & risk — a single, intentional legal surface (not scattered small-print).
@@ -59,6 +60,7 @@ const SECTIONS: { h: string; body: string }[] = [
 ];
 
 export function Legal() {
+  useDocumentTitle("Terms & risk");
   return (
     <div className="mx-auto max-w-[680px]">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Terms &amp; risk</h1>

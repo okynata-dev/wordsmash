@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="keepney">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Keepney">
   <rect width="32" height="32" rx="7" fill="#18181b" />
-  <path d="M6 10 L11 23 L16 14 L21 23 L26 10" fill="none" stroke="#fafafa"
-        stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+  <g transform="translate(6 6) scale(0.833)">
+    <path d="M11.25 4.533A9.7 9.7 0 0 0 6 3a9.7 9.7 0 0 0-3.25.555.75.75 0 0 0-.5.707v13.5a.75.75 0 0 0 1 .707A8.2 8.2 0 0 1 6 18c1.99 0 3.82.706 5.25 1.885V4.533ZM12.75 19.885A8.2 8.2 0 0 1 18 18c.96 0 1.89.165 2.75.47a.75.75 0 0 0 1-.708v-13.5a.75.75 0 0 0-.5-.707A9.7 9.7 0 0 0 18 3a9.7 9.7 0 0 0-5.25 1.533v15.352Z" fill="#fafafa" />
+  </g>
 </svg>
