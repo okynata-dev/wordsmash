@@ -1,6 +1,8 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useSignMessage } from "wagmi";
+import { PRIVY_ENABLED } from "../config";
 import {
   profileUpdateMessage,
   avatarUploadMessage,
@@ -44,6 +46,39 @@ async function fileToAvatarDataUrl(file: File): Promise<string> {
   throw new Error("Image too large after compression. Try a smaller picture.");
 }
 
+/** Quick-pick avatars: a gradient + a glyph, so a fresh (email/social) account can
+    grab a fun picture without uploading a file. Each renders to a JPEG data URL and
+    goes through the same signed upload as a file. */
+const AVATAR_PRESETS: { from: string; to: string; glyph: string }[] = [
+  { from: "#0000FF", to: "#5b8cff", glyph: "📖" },
+  { from: "#ff5e5e", to: "#ffb199", glyph: "🔥" },
+  { from: "#8a2be2", to: "#ff6ad5", glyph: "🦄" },
+  { from: "#11998e", to: "#38ef7d", glyph: "🍀" },
+  { from: "#f7971e", to: "#ffd200", glyph: "👑" },
+  { from: "#1f2937", to: "#4b5563", glyph: "💎" },
+  { from: "#ff0080", to: "#7928ca", glyph: "⚡" },
+  { from: "#2193b0", to: "#6dd5ed", glyph: "🌙" },
+];
+
+function presetAvatarDataUrl(p: { from: string; to: string; glyph: string }): string {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not supported");
+  const g = ctx.createLinearGradient(0, 0, size, size);
+  g.addColorStop(0, p.from);
+  g.addColorStop(1, p.to);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  ctx.font = "150px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(p.glyph, size / 2, size / 2 + 12);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
 export function EditProfile({
   address,
   meta,
@@ -72,6 +107,7 @@ export function EditProfile({
   const [website, setWebsite] = useState(meta.website ?? "");
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [presetBusy, setPresetBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const usernameError = (() => {
@@ -79,23 +115,42 @@ export function EditProfile({
     return validateUsername(u);
   })();
 
+  // Sign + upload a ready data URL (shared by file upload and preset picks).
+  async function commitAvatar(dataUrl: string) {
+    if (!connected) return;
+    const timestamp = Date.now();
+    const message = avatarUploadMessage(connected, timestamp);
+    const signature = await signMessageAsync({ message });
+    await api.uploadAvatar(connected, { dataUrl, timestamp, signature });
+    await qc.invalidateQueries({ queryKey: profileKey(address) });
+    toast.success("Avatar updated");
+  }
+
   async function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !connected) return;
     setUploadingAvatar(true);
     try {
-      const dataUrl = await fileToAvatarDataUrl(file);
-      const timestamp = Date.now();
-      const message = avatarUploadMessage(connected, timestamp);
-      const signature = await signMessageAsync({ message });
-      await api.uploadAvatar(connected, { dataUrl, timestamp, signature });
-      await qc.invalidateQueries({ queryKey: profileKey(address) });
-      toast.success("Avatar updated");
+      await commitAvatar(await fileToAvatarDataUrl(file));
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setUploadingAvatar(false);
+    }
+  }
+
+  async function onPickPreset(i: number) {
+    if (!connected || uploadingAvatar) return;
+    setPresetBusy(i);
+    setUploadingAvatar(true);
+    try {
+      await commitAvatar(presetAvatarDataUrl(AVATAR_PRESETS[i]));
+    } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
+      setUploadingAvatar(false);
+      setPresetBusy(null);
     }
   }
 
@@ -176,6 +231,25 @@ export function EditProfile({
         </div>
       </div>
 
+      <div>
+        <p className="mb-2 text-xs font-medium text-muted">Or pick one</p>
+        <div className="flex flex-wrap gap-2">
+          {AVATAR_PRESETS.map((p, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onPickPreset(i)}
+              disabled={uploadingAvatar}
+              aria-label={`Use ${p.glyph} avatar`}
+              className="grid h-10 w-10 place-items-center rounded-full text-lg shadow-sm ring-1 ring-border transition hover:scale-105 hover:ring-[rgb(var(--c-volt))] disabled:opacity-50"
+              style={{ backgroundImage: `linear-gradient(135deg, ${p.from}, ${p.to})` }}
+            >
+              {presetBusy === i ? <Spinner /> : p.glyph}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <form onSubmit={onSubmit} className="space-y-4">
         <Field label="Username" htmlFor={ids.username} hint="3-20 chars, a-z, 0-9, _">
           <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-fg/40">
@@ -210,21 +284,7 @@ export function EditProfile({
           </p>
         </Field>
 
-        <Field label="X / Twitter" htmlFor={ids.twitter} hint="handle without @">
-          <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-fg/40">
-            <span className="text-sm text-faint">x.com/</span>
-            <input
-              id={ids.twitter}
-              value={twitter}
-              onChange={(e) => setTwitter(e.target.value)}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="handle"
-              className="w-full bg-transparent py-2 pl-1 text-sm outline-none"
-            />
-          </div>
-        </Field>
+        <TwitterField htmlFor={ids.twitter} value={twitter} onChange={setTwitter} />
 
         <Field label="Website" htmlFor={ids.website}>
           <input
@@ -262,6 +322,95 @@ export function EditProfile({
         </div>
       </form>
     </Card>
+  );
+}
+
+function XGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+    </svg>
+  );
+}
+
+/** X / Twitter field: a verified Privy connect when available, else a free-text handle. */
+function TwitterField({
+  htmlFor,
+  value,
+  onChange,
+}: {
+  htmlFor: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (PRIVY_ENABLED) return <TwitterConnect value={value} onChange={onChange} />;
+  return (
+    <Field label="X / Twitter" htmlFor={htmlFor} hint="handle without @">
+      <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-fg/40">
+        <span className="text-sm text-faint">x.com/</span>
+        <input
+          id={htmlFor}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="handle"
+          className="w-full bg-transparent py-2 pl-1 text-sm outline-none"
+        />
+      </div>
+    </Field>
+  );
+}
+
+/** Connect the real X account via Privy OAuth — the handle can't be typed/faked,
+    it comes from the verified link. Save persists it to the profile. */
+function TwitterConnect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { user, linkTwitter, unlinkTwitter } = usePrivy();
+  const linked = user?.twitter?.username ?? null;
+  const subject = user?.twitter?.subject ?? null;
+
+  // Once connected, lock the saved handle to the verified username.
+  useEffect(() => {
+    if (linked && linked !== value) onChange(linked);
+  }, [linked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between">
+        <span className="text-sm font-medium">X / Twitter</span>
+        <span className="text-xs text-faint">verified by connecting</span>
+      </div>
+      {linked ? (
+        <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2">
+          <span className="inline-flex items-center gap-1.5 text-sm">
+            <span className="text-positive" aria-label="Verified">
+              ✓
+            </span>
+            x.com/{linked}
+          </span>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!subject) return;
+              await unlinkTwitter(subject);
+              onChange("");
+            }}
+            className="text-xs text-muted hover:text-fg"
+          >
+            Disconnect
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => linkTwitter()}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium transition hover:border-[rgb(var(--c-volt))]"
+        >
+          <XGlyph /> Connect X
+        </button>
+      )}
+    </div>
   );
 }
 
