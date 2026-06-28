@@ -85,7 +85,7 @@ export function normalizeWebsite(input: string | null | undefined): string | nul
 // ── canonical signed messages (identical on client + server) ──────────────────
 export function profileUpdateMessage(address: string, p: ProfileEditable, timestamp: number): string {
   return [
-    "wordsmash: update profile",
+    "keepney: update profile",
     `address: ${address.toLowerCase()}`,
     `username: ${JSON.stringify(p.username ?? null)}`,
     `bio: ${JSON.stringify(p.bio ?? null)}`,
@@ -96,12 +96,12 @@ export function profileUpdateMessage(address: string, p: ProfileEditable, timest
 }
 
 export function avatarUploadMessage(address: string, timestamp: number): string {
-  return `wordsmash: upload avatar\naddress: ${address.toLowerCase()}\nissued: ${timestamp}`;
+  return `keepney: upload avatar\naddress: ${address.toLowerCase()}\nissued: ${timestamp}`;
 }
 
 export function commentMessage(address: string, word: string, body: string, timestamp: number): string {
   return [
-    "wordsmash: post comment",
+    "keepney: post comment",
     `address: ${address.toLowerCase()}`,
     `word: ${word}`,
     `body: ${JSON.stringify(body)}`,
@@ -111,7 +111,7 @@ export function commentMessage(address: string, word: string, body: string, time
 
 export function watchlistMessage(address: string, tokenId: string, on: boolean, timestamp: number): string {
   return [
-    "wordsmash: toggle watchlist",
+    "keepney: toggle watchlist",
     `address: ${address.toLowerCase()}`,
     `token: ${tokenId}`,
     `on: ${on}`,

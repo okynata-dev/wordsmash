@@ -10,7 +10,7 @@ import { Button, Spinner } from "./ui";
 import { useToast } from "./Toast";
 import { shortAddr, friendlyError } from "../lib/format";
 
-const FAUCET_URL = "https://www.alchemy.com/faucets/base-sepolia";
+const FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet?network=base-sepolia";
 
 /** Account wallet panel: balance, deposit (on-ramp / receive), send (withdraw),
     and — for the Privy embedded wallet — export to another wallet. Reachable from

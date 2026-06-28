@@ -29,8 +29,14 @@ const privyConfig: PrivyClientConfig = {
   // dashboard is the source of truth for which are enabled; this just sets order.
   loginMethods: ["email", "google", "twitter", "wallet"],
   // A user who signs in with email/Google (no wallet) gets one created for them,
-  // so they can claim a word immediately.
-  embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
+  // so they can claim a word immediately. showWalletUIs:false signs/sends silently
+  // for the embedded wallet — our own UI is the confirmation (e.g. the Send review
+  // step), and the off-chain profile signatures are free, so a popup each time is
+  // just friction. External wallets (MetaMask) still show their own prompt.
+  embeddedWallets: {
+    ethereum: { createOnLogin: "users-without-wallets" },
+    showWalletUIs: false,
+  },
   defaultChain: activeChain,
   supportedChains: [activeChain],
 };
