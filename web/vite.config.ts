@@ -17,6 +17,7 @@ export default defineConfig({
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
           web3: ["wagmi", "viem", "@tanstack/react-query"],
+          privy: ["@privy-io/react-auth", "@privy-io/wagmi"],
         },
       },
     },

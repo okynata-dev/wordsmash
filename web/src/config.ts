@@ -25,6 +25,13 @@ export const DEED_MARKETPLACE = asAddress(env("VITE_DEED_MARKETPLACE"));
 
 export const WALLETCONNECT_PROJECT_ID = env("VITE_WALLETCONNECT_PROJECT_ID") ?? "";
 
+// Privy app id (public client id, safe to ship). When present, sign-in goes through
+// the Privy modal (email / Google / X + embedded wallet, like pump.fun) and Privy
+// manages wagmi's connectors. When absent, the app falls back to the injected-only
+// wallet stack + the custom connect dialog, so nothing breaks without it.
+export const PRIVY_APP_ID = env("VITE_PRIVY_APP_ID") ?? "";
+export const PRIVY_ENABLED = PRIVY_APP_ID.length > 0;
+
 // VITE_USE_ANVIL=1 selects the local anvil chain; otherwise Base Sepolia.
 export const USE_ANVIL = bool("VITE_USE_ANVIL");
 

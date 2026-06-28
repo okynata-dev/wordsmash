@@ -1,31 +1,66 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
+import { PRIVY_ENABLED } from "../config";
 import { friendlyError } from "../lib/format";
 import { useToast } from "./Toast";
 
-type Ctx = { open: () => void; close: () => void };
-const ConnectModalCtx = createContext<Ctx>({ open: () => {}, close: () => {} });
+type Ctx = { open: () => void; close: () => void; signOut: () => void };
+const ConnectModalCtx = createContext<Ctx>({
+  open: () => {},
+  close: () => {},
+  signOut: () => {},
+});
 
-/** Call `open()` to show the sign-in modal from anywhere (header CTA, hero claim). */
+/**
+ * `open()` shows the sign-in modal, `signOut()` ends the session. Call from anywhere
+ * (header CTA, hero claim). Backed by Privy when an app id is set, otherwise by the
+ * built-in wallet dialog below.
+ */
 export function useConnectModal() {
   return useContext(ConnectModalCtx);
 }
 
-/**
- * One global sign-in modal: a proper centered dialog with a dimmed backdrop (not a
- * dropdown). Lists the available wallets; closes itself the moment a wallet connects.
- * Social login (Google / X / email) is a separate Privy integration — not here yet.
- */
 export function ConnectModalProvider({ children }: { children: ReactNode }) {
+  return PRIVY_ENABLED ? (
+    <PrivyConnect>{children}</PrivyConnect>
+  ) : (
+    <FallbackConnect>{children}</FallbackConnect>
+  );
+}
+
+/** Privy-backed: `open()` opens Privy's full login modal (email/Google/X + wallets). */
+function PrivyConnect({ children }: { children: ReactNode }) {
+  const { ready, authenticated, login, logout } = usePrivy();
+  const value: Ctx = {
+    // Guard against opening before Privy is ready or when already signed in.
+    open: () => {
+      if (ready && !authenticated) login();
+    },
+    close: () => {},
+    signOut: () => {
+      void logout();
+    },
+  };
+  return <ConnectModalCtx.Provider value={value}>{children}</ConnectModalCtx.Provider>;
+}
+
+/** Fallback (no Privy app id): the original centered wallet dialog. */
+function FallbackConnect({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const { isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
 
   // Connecting succeeds elsewhere -> dismiss.
   useEffect(() => {
     if (isConnected) setIsOpen(false);
   }, [isConnected]);
 
-  const value: Ctx = { open: () => setIsOpen(true), close: () => setIsOpen(false) };
+  const value: Ctx = {
+    open: () => setIsOpen(true),
+    close: () => setIsOpen(false),
+    signOut: () => disconnect(),
+  };
 
   return (
     <ConnectModalCtx.Provider value={value}>

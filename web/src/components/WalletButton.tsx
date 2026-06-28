@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useAccount, useDisconnect, useSwitchChain } from "wagmi";
+import { useAccount, useSwitchChain } from "wagmi";
 import { activeChain } from "../wagmi";
 import { Button } from "./ui";
 import { shortAddr, friendlyError } from "../lib/format";
@@ -33,11 +33,10 @@ function useDropdown() {
 export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}) {
   const w = fullWidth ? "w-full " : "";
   const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
   const { switchChain, isPending: switching } = useSwitchChain();
   const wrongNetwork = useWrongNetwork();
   const toast = useToast();
-  const { open: openConnect } = useConnectModal();
+  const { open: openConnect, signOut } = useConnectModal();
   const { open, setOpen, ref, id } = useDropdown();
 
   if (isConnected && wrongNetwork) {
@@ -80,7 +79,7 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
               role="menuitem"
               className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-surface-2"
               onClick={() => {
-                disconnect();
+                signOut();
                 setOpen(false);
               }}
             >

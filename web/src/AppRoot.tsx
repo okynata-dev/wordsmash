@@ -1,8 +1,11 @@
-import React from "react";
+import React, { type ReactNode } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { WagmiProvider } from "wagmi";
+import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
+import { PrivyProvider, type PrivyClientConfig } from "@privy-io/react-auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { wagmiConfig } from "./wagmi";
+import { wagmiConfig, activeChain } from "./wagmi";
+import { PRIVY_APP_ID, PRIVY_ENABLED } from "./config";
 import { ToastProvider } from "./components/Toast";
 import { ConnectModalProvider } from "./components/ConnectModal";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -14,30 +17,70 @@ const queryClient = new QueryClient({
   },
 });
 
+// Privy modal theming — dark, the brand volt-blue accent, the book logo.
+const privyConfig: PrivyClientConfig = {
+  appearance: {
+    theme: "dark",
+    accentColor: "#0000FF",
+    logo: "https://keepney.com/icon-192.png",
+    walletChainType: "ethereum-only",
+  },
+  // Email / Google / X first, then external wallets — pump-style ordering. The
+  // dashboard is the source of truth for which are enabled; this just sets order.
+  loginMethods: ["email", "google", "twitter", "wallet"],
+  // A user who signs in with email/Google (no wallet) gets one created for them,
+  // so they can claim a word immediately.
+  embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
+  defaultChain: activeChain,
+  supportedChains: [activeChain],
+};
+
+/** Toast + connect-modal + router + app — shared by both provider stacks. */
+function Inner() {
+  return (
+    <ToastProvider>
+      <ConnectModalProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ConnectModalProvider>
+    </ToastProvider>
+  );
+}
+
+/** Privy stack: PrivyProvider → Query → Privy's WagmiProvider (keeps wagmi in sync). */
+function PrivyStack({ children }: { children: ReactNode }) {
+  return (
+    <PrivyProvider appId={PRIVY_APP_ID} config={privyConfig}>
+      <QueryClientProvider client={queryClient}>
+        <PrivyWagmiProvider config={wagmiConfig}>{children}</PrivyWagmiProvider>
+      </QueryClientProvider>
+    </PrivyProvider>
+  );
+}
+
+/** Fallback stack (no Privy app id): the original injected-only wagmi setup.
+    reconnectOnMount=false so a page load never probes the injected wallet. */
+function PlainStack({ children }: { children: ReactNode }) {
+  return (
+    <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </WagmiProvider>
+  );
+}
+
 /**
- * The full application shell — wagmi/query/router providers + routes. Loaded via
- * a dynamic import() from main.tsx so the pre-launch coming-soon landing ships
- * with zero web3 dependencies (wagmi/viem/walletconnect stay in this chunk).
+ * The full application shell. Loaded via a dynamic import() from main.tsx so the
+ * pre-launch coming-soon landing ships with zero web3/Privy dependencies.
  */
 export function AppRoot() {
+  const Stack = PRIVY_ENABLED ? PrivyStack : PlainStack;
   return (
     <React.StrictMode>
       <ErrorBoundary>
-        {/* reconnectOnMount=false: never touch a wallet on page load. Auto-reconnect
-            would re-probe the injected wallet on every visit, which makes the browser
-            pop a "let this site access other apps" permission before the user has
-            clicked anything. Wallet interaction now happens only on an explicit Connect. */}
-        <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
-          <QueryClientProvider client={queryClient}>
-            <ToastProvider>
-              <ConnectModalProvider>
-                <BrowserRouter>
-                  <App />
-                </BrowserRouter>
-              </ConnectModalProvider>
-            </ToastProvider>
-          </QueryClientProvider>
-        </WagmiProvider>
+        <Stack>
+          <Inner />
+        </Stack>
       </ErrorBoundary>
     </React.StrictMode>
   );

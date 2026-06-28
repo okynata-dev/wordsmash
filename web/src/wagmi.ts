@@ -1,8 +1,9 @@
 import { createConfig, http } from "wagmi";
+import { createConfig as createPrivyConfig } from "@privy-io/wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 import { defineChain } from "viem";
-import { ANVIL_CHAIN_ID, ANVIL_RPC, BASE_SEPOLIA_RPC, USE_ANVIL } from "./config";
+import { ANVIL_CHAIN_ID, ANVIL_RPC, BASE_SEPOLIA_RPC, USE_ANVIL, PRIVY_ENABLED } from "./config";
 
 // Local anvil chain for dev (id 31337).
 export const anvil = defineChain({
@@ -19,20 +20,20 @@ export const anvil = defineChain({
 // The chain this build targets (one active chain at a time, chosen by env flag).
 export const activeChain = USE_ANVIL ? anvil : baseSepolia;
 
-// Injected-only (MetaMask/Coinbase/Rabby/etc.). WalletConnect is intentionally NOT
-// statically imported — its Web3Modal graph is ~420kB and ships even when disabled.
-// To re-enable mobile/QR later: set VITE_WALLETCONNECT_PROJECT_ID and add the connector
-// via a dynamic `import("wagmi/connectors")` so the heavy code only loads when used.
-const connectors = [injected()];
+const chains = (USE_ANVIL ? [anvil] : [baseSepolia]) as const;
+const transports = {
+  [anvil.id]: http(ANVIL_RPC),
+  [baseSepolia.id]: http(BASE_SEPOLIA_RPC),
+};
 
-export const wagmiConfig = createConfig({
-  chains: USE_ANVIL ? [anvil] : [baseSepolia],
-  connectors,
-  transports: {
-    [anvil.id]: http(ANVIL_RPC),
-    [baseSepolia.id]: http(BASE_SEPOLIA_RPC),
-  },
-});
+// With Privy enabled, Privy owns the connectors (injected + embedded wallet) and
+// syncs the active wallet into wagmi — so we build the config via Privy's createConfig
+// (no connectors of our own). Without an app id we fall back to the injected-only
+// stack. WalletConnect stays out of the bundle either way (its Web3Modal graph is
+// ~420kB); re-add it later via a dynamic import + VITE_WALLETCONNECT_PROJECT_ID.
+export const wagmiConfig = PRIVY_ENABLED
+  ? createPrivyConfig({ chains, transports })
+  : createConfig({ chains, connectors: [injected()], transports });
 
 declare module "wagmi" {
   interface Register {
