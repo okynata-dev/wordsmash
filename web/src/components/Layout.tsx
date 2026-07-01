@@ -199,6 +199,19 @@ export function Layout() {
     };
   }, [menuOpen]);
 
+  // Lock background scroll while the mobile menu is open (it's an overlay, so the
+  // page underneath must not scroll behind it). The scroll container here is the
+  // documentElement (<html>), not <body> — locking body alone doesn't hold.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const el = document.documentElement;
+    const prev = el.style.overflow;
+    el.style.overflow = "hidden";
+    return () => {
+      el.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
   return (
     <div className="flex min-h-full">
       {/* ── Left sidebar (desktop) ── */}
@@ -250,7 +263,12 @@ export function Layout() {
           </div>
 
           {menuOpen && (
-            <div id={menuId} className="border-t border-border px-4 py-3 md:hidden">
+            // Overlay (absolute, out of flow) so opening the menu never pushes the
+            // page content down. top-full hangs it right below the bar.
+            <div
+              id={menuId}
+              className="absolute inset-x-0 top-full z-40 max-h-[85vh] overflow-y-auto border-b border-border bg-bg px-4 py-3 shadow-lg md:hidden"
+            >
               <div className="mb-3 sm:hidden">
                 <SearchBox onNavigate={() => setMenuOpen(false)} />
               </div>
@@ -270,6 +288,16 @@ export function Layout() {
             </div>
           )}
         </header>
+
+        {/* Dimmed backdrop behind the mobile menu (below the header's z-30 so the bar
+            and menu stay above it); tap to close. */}
+        {menuOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/40 md:hidden"
+            aria-hidden
+            onClick={() => setMenuOpen(false)}
+          />
+        )}
 
         <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 pt-8 pb-24 sm:px-6 md:pb-8">
           <ErrorBoundary key={location.pathname}>
