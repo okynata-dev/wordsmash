@@ -101,8 +101,9 @@ function MoonIcon({ className = "" }: IconProps) {
   );
 }
 
-/** Light/dark switch — light is the default; the choice persists per device. */
-function ThemeToggle() {
+/** Light/dark switch — light is the default; the choice persists per device.
+    Icon-only in the sidebar footer; `labeled` for the roomier mobile menu. */
+function ThemeToggle({ labeled = false }: { labeled?: boolean }) {
   const [theme, setTheme] = useState<Theme>(storedTheme);
   function toggle() {
     const next: Theme = theme === "dark" ? "light" : "dark";
@@ -110,27 +111,69 @@ function ThemeToggle() {
     applyTheme(next);
   }
   const dark = theme === "dark";
+  const label = dark ? "Switch to light theme" : "Switch to dark theme";
+  const icon = dark ? <SunIcon className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />;
+  if (labeled) {
+    return (
+      <button
+        onClick={toggle}
+        className="flex w-fit items-center gap-2 text-xs text-faint transition hover:text-fg"
+        aria-label={label}
+      >
+        {icon}
+        {dark ? "Light mode" : "Dark mode"}
+      </button>
+    );
+  }
   return (
     <button
       onClick={toggle}
-      className="flex w-fit items-center gap-2 text-xs text-faint transition hover:text-fg"
-      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+      title={label}
+      aria-label={label}
+      className="-m-1.5 rounded-md p-1.5 text-faint transition hover:bg-surface-2 hover:text-fg"
     >
-      {dark ? <SunIcon className="h-3.5 w-3.5" /> : <MoonIcon className="h-3.5 w-3.5" />}
-      {dark ? "Light mode" : "Dark mode"}
+      {icon}
     </button>
   );
 }
 
-/** The wordmark — a book glyph + "keepney" with a soft-blue "keep". */
+/** Quiet network status — a colored dot beats a shouting uppercase chip. */
+function NetworkStatus() {
+  const testnet = Boolean(activeChain.testnet);
+  return (
+    <span className="flex items-center gap-1.5 text-faint">
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${testnet ? "bg-warning" : "bg-positive"}`}
+        aria-hidden="true"
+      />
+      {activeChain.name}
+      {testnet && " · testnet"}
+    </span>
+  );
+}
+
+/**
+ * The wordmark. The book lives on a blue gradient tile (app-icon style) — a fixed
+ * tile aligns optically with the text where a bare glyph never quite did, and it
+ * carries the brand blue so the wordmark itself stays one clean color.
+ */
 function Logo() {
   return (
-    <Link to="/" className="flex shrink-0 items-center gap-1.5">
-      <svg viewBox="0 0 24 24" width="20" height="20" className="shrink-0 text-fg" fill="currentColor" aria-hidden="true">
-        <path d="M11.25 4.533A9.7 9.7 0 0 0 6 3a9.7 9.7 0 0 0-3.25.555.75.75 0 0 0-.5.707v13.5a.75.75 0 0 0 1 .707A8.2 8.2 0 0 1 6 18c1.99 0 3.82.706 5.25 1.885V4.533ZM12.75 19.885A8.2 8.2 0 0 1 18 18c.96 0 1.89.165 2.75.47a.75.75 0 0 0 1-.708v-13.5a.75.75 0 0 0-.5-.707A9.7 9.7 0 0 0 18 3a9.7 9.7 0 0 0-5.25 1.533v15.352Z" />
-      </svg>
-      <span className="font-display text-lg font-semibold leading-none tracking-tight">
-        <span className="text-[#5b8cff]">keep</span>ney
+    <Link to="/" className="flex shrink-0 items-center gap-2">
+      <span
+        className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[8px] text-white"
+        style={{
+          background: "linear-gradient(135deg, #5b8cff 0%, rgb(var(--c-volt)) 100%)",
+          boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.25), 0 1px 2px rgb(0 0 255 / 0.25)",
+        }}
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+          <path d="M11.25 4.533A9.7 9.7 0 0 0 6 3a9.7 9.7 0 0 0-3.25.555.75.75 0 0 0-.5.707v13.5a.75.75 0 0 0 1 .707A8.2 8.2 0 0 1 6 18c1.99 0 3.82.706 5.25 1.885V4.533ZM12.75 19.885A8.2 8.2 0 0 1 18 18c.96 0 1.89.165 2.75.47a.75.75 0 0 0 1-.708v-13.5a.75.75 0 0 0-.5-.707A9.7 9.7 0 0 0 18 3a9.7 9.7 0 0 0-5.25 1.533v15.352Z" />
+        </svg>
+      </span>
+      <span className="font-display text-[17px] font-semibold leading-none tracking-tight">
+        keepney
       </span>
     </Link>
   );
@@ -272,17 +315,21 @@ export function Layout() {
         <div className="mt-6 flex flex-col">
           <SidebarNav />
         </div>
-        <div className="mt-auto flex flex-col gap-2 px-2 pt-4 text-xs text-faint">
-          <span className="inline-flex w-fit items-center rounded bg-surface-2 px-1.5 py-0.5 uppercase tracking-wide">
-            {activeChain.name}
-          </span>
-          <Link to="/how" className="hover:text-fg">
-            How it works
-          </Link>
-          <Link to="/legal" className="hover:text-fg">
-            Terms &amp; risk
-          </Link>
-          <ThemeToggle />
+        <div className="mt-auto px-2">
+          <div className="flex flex-col gap-2.5 border-t border-border pt-4 text-xs">
+            <nav aria-label="Secondary" className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3 text-muted">
+                <Link to="/how" className="hover:text-fg">
+                  How it works
+                </Link>
+                <Link to="/legal" className="hover:text-fg">
+                  Terms
+                </Link>
+              </div>
+              <ThemeToggle />
+            </nav>
+            <NetworkStatus />
+          </div>
         </div>
       </aside>
 
@@ -331,22 +378,19 @@ export function Layout() {
                 <div className="pt-1">
                   <WalletButton />
                 </div>
-                <Link
-                  to="/how"
-                  onClick={() => setMenuOpen(false)}
-                  className="px-1 pt-1 text-xs text-faint hover:text-fg"
-                >
-                  How it works
-                </Link>
-                <Link
-                  to="/legal"
-                  onClick={() => setMenuOpen(false)}
-                  className="px-1 pt-1 text-xs text-faint hover:text-fg"
-                >
-                  Terms &amp; risk
-                </Link>
-                <div className="px-1 pt-1 pb-2">
-                  <ThemeToggle />
+                <div className="mt-1 flex flex-col gap-2.5 border-t border-border px-1 pb-2 pt-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 text-muted">
+                      <Link to="/how" onClick={() => setMenuOpen(false)} className="hover:text-fg">
+                        How it works
+                      </Link>
+                      <Link to="/legal" onClick={() => setMenuOpen(false)} className="hover:text-fg">
+                        Terms
+                      </Link>
+                    </div>
+                    <ThemeToggle />
+                  </div>
+                  <NetworkStatus />
                 </div>
               </div>
             </div>
