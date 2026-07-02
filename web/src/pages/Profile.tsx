@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { useProfile } from "../hooks/useProfile";
 import { WordTile } from "../components/WordTile";
+import { EarningsCard } from "../components/EarningsCard";
 import { ShareButton } from "../components/ShareButton";
 import { Avatar } from "../components/Avatar";
 import { EditProfile } from "../components/EditProfile";
@@ -125,6 +126,10 @@ export function Profile() {
                 )}
               </div>
             </Card>
+          )}
+
+          {isSelf && connected && (
+            <EarningsCard address={connected} owned={data.owned} />
           )}
 
           <div className="mb-4 flex items-center gap-1 border-b border-border text-sm">

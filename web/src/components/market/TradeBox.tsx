@@ -194,6 +194,23 @@ function BuyPanel({
         invalid={invalid}
       />
 
+      {/* One-tap amounts — most buys are a standard size, don't make people type. */}
+      <div className="flex gap-1.5" role="group" aria-label="Quick amounts">
+        {["0.001", "0.005", "0.01", "0.05"].map((v) => (
+          <button
+            key={v}
+            onClick={() => setInput(v)}
+            className={`flex-1 rounded-md px-1 py-1 text-xs tabular-nums transition ${
+              input === v
+                ? "bg-accent text-accent-fg"
+                : "bg-surface-2 text-muted hover:text-fg"
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
       <QuoteLine
         label="You receive (est.)"
         value={
@@ -320,6 +337,20 @@ function SellPanel({
       <p className="text-xs text-faint">
         Balance: {tokenLabel(bal, symbol)}
       </p>
+
+      {/* One-tap fractions of the position — exact wei, no typing. */}
+      <div className="flex gap-1.5" role="group" aria-label="Quick amounts">
+        {([25, 50, 100] as const).map((p) => (
+          <button
+            key={p}
+            disabled={bal <= 0n}
+            onClick={() => setInput(formatUnits((bal * BigInt(p)) / 100n, 18))}
+            className="flex-1 rounded-md bg-surface-2 px-1 py-1 text-xs tabular-nums text-muted transition hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {p === 100 ? "All" : `${p}%`}
+          </button>
+        ))}
+      </div>
 
       <QuoteLine
         label="You receive (est.)"

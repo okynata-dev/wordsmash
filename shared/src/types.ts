@@ -6,6 +6,7 @@ export interface WordRow {
   owner: string; // checksummed address
   claimedAt: number; // unix seconds
   tx: string; // claim tx hash
+  market?: string | null; // the word's bonding-curve market address (v2)
   // Optional token-market fields (present on /words rows once a word has a market):
   priceWei?: string; // spot price, wei/token
   tradeVolumeWei?: string; // token bonding-curve volume

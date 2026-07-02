@@ -187,6 +187,7 @@ function toWordRow(r: {
   owner: string;
   claimed_at: number;
   tx: string;
+  market?: string | null;
 }): WordRow {
   return {
     tokenId: r.token_id,
@@ -194,6 +195,8 @@ function toWordRow(r: {
     owner: checksum(r.owner),
     claimedAt: Number(r.claimed_at ?? 0),
     tx: r.tx ?? "",
+    // The market address lets the profile page read claimable deed fees on-chain.
+    market: r.market ?? null,
   };
 }
 
@@ -245,10 +248,17 @@ export async function getProfile(db: Db, addressLower: string): Promise<Profile>
 
   const { results: owned } = await db
     .prepare(
-      "SELECT token_id, word, owner, claimed_at, tx FROM words WHERE owner = ? ORDER BY claimed_at DESC LIMIT ?",
+      "SELECT token_id, word, owner, claimed_at, tx, market FROM words WHERE owner = ? ORDER BY claimed_at DESC LIMIT ?",
     )
     .bind(address, OWNED_CAP)
-    .all<{ token_id: string; word: string | null; owner: string; claimed_at: number; tx: string }>();
+    .all<{
+      token_id: string;
+      word: string | null;
+      owner: string;
+      claimed_at: number;
+      tx: string;
+      market: string | null;
+    }>();
 
   const { results: listings } = await db
     .prepare(

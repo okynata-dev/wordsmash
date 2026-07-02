@@ -1,6 +1,8 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import type { MarketInfo } from "@shared/types";
+import { api } from "../../api";
 import { Card, Pill, Skeleton } from "../ui";
 import { WhitelistGate } from "../WhitelistGate";
 import { WalletButton } from "../WalletButton";
@@ -74,6 +76,36 @@ export function WordMarketPanel({
   const isDeedOwner =
     Boolean(address) && Boolean(deedOwner) && normAddr(address) === normAddr(deedOwner);
 
+  // 24h price change — the "is this alive" signal. Hourly candles, baseline is
+  // the last close before the 24h window (or the window's first open).
+  const candles1h = useQuery({
+    queryKey: ["chart", word, 3600],
+    queryFn: () => api.candles(word, 3600),
+    retry: 1,
+    enabled: Boolean(info),
+    refetchInterval: 60_000,
+  });
+  const change24h = useMemo(() => {
+    const cs = candles1h.data ?? [];
+    if (cs.length === 0) return null;
+    const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
+    const toNum = (wei: string) => {
+      try {
+        return Number(BigInt(wei));
+      } catch {
+        return 0;
+      }
+    };
+    const last = toNum(cs[cs.length - 1].c);
+    const before = cs.filter((c) => c.t < dayAgo);
+    const inWindow = cs.filter((c) => c.t >= dayAgo);
+    const base = before.length
+      ? toNum(before[before.length - 1].c)
+      : toNum(inWindow[0]?.o ?? cs[0].o);
+    if (!(base > 0)) return null;
+    return ((last - base) / base) * 100;
+  }, [candles1h.data]);
+
   // Flash the price green/red for ~1s whenever it ticks — the live "wow" beat.
   const [priceFlash, setPriceFlash] = useState<"" | "price-up" | "price-down">("");
   const prevPrice = useRef<bigint | undefined>(undefined);
@@ -114,8 +146,21 @@ export function WordMarketPanel({
                   </span>
                 )}
               </div>
-              <div className={`mt-1 text-3xl font-semibold tabular-nums sm:text-4xl ${priceFlash}`}>
-                {priceWei !== undefined ? ethLabel(priceWei) : <Skeleton className="h-9 w-40" />}
+              <div className="flex flex-wrap items-baseline gap-2.5">
+                <div className={`mt-1 text-3xl font-semibold tabular-nums sm:text-4xl ${priceFlash}`}>
+                  {priceWei !== undefined ? ethLabel(priceWei) : <Skeleton className="h-9 w-40" />}
+                </div>
+                {change24h !== null && (
+                  <span
+                    className={`text-sm font-medium tabular-nums ${
+                      change24h >= 0 ? "text-positive" : "text-negative"
+                    }`}
+                    title="Change over the last 24 hours"
+                  >
+                    {change24h >= 0 ? "+" : ""}
+                    {change24h.toFixed(1)}% <span className="text-xs font-normal">24h</span>
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex gap-6 text-right">
