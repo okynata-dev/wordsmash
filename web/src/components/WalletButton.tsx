@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAccount, useSwitchChain } from "wagmi";
 import { activeChain } from "../wagmi";
 import { Avatar } from "./Avatar";
-import { WalletPanel } from "./WalletPanel";
+import { useWalletPanel } from "./WalletPanel";
 import { Button } from "./ui";
 import { shortAddr, friendlyError, normAddr } from "../lib/format";
 import { useWrongNetwork } from "../hooks/useRegistry";
@@ -40,8 +40,8 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
   const wrongNetwork = useWrongNetwork();
   const toast = useToast();
   const { open: openConnect, signOut } = useConnectModal();
+  const { open: openWalletPanel } = useWalletPanel();
   const { open, setOpen, ref, id } = useDropdown();
-  const [walletOpen, setWalletOpen] = useState(false);
 
   if (isConnected && wrongNetwork) {
     return (
@@ -114,7 +114,10 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
             <button
               role="menuitem"
               onClick={() => {
-                setWalletOpen(true);
+                // Panel state lives app-level (WalletPanelProvider): rendering it here,
+                // inside the sticky header, would clip it (backdrop-filter containing
+                // block) and closing the mobile menu would unmount it mid-send.
+                openWalletPanel();
                 setOpen(false);
               }}
               className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-surface-2"
@@ -139,9 +142,6 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
               Disconnect
             </button>
           </div>
-        )}
-        {walletOpen && (
-          <WalletPanel address={address} onClose={() => setWalletOpen(false)} />
         )}
       </div>
     );

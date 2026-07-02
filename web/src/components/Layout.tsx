@@ -212,6 +212,17 @@ export function Layout() {
     };
   }, [menuOpen]);
 
+  // The overlay is md:hidden — if the viewport crosses into desktop while the menu
+  // is open, close it so the scroll lock doesn't linger on an invisible menu.
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    function onChange() {
+      if (mq.matches) setMenuOpen(false);
+    }
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   return (
     <div className="flex min-h-full">
       {/* ── Left sidebar (desktop) ── */}
@@ -226,6 +237,9 @@ export function Layout() {
           <span className="inline-flex w-fit items-center rounded bg-surface-2 px-1.5 py-0.5 uppercase tracking-wide">
             {activeChain.name}
           </span>
+          <Link to="/how" className="hover:text-fg">
+            How it works
+          </Link>
           <Link to="/legal" className="hover:text-fg">
             Terms &amp; risk
           </Link>
@@ -278,6 +292,13 @@ export function Layout() {
                   <WalletButton />
                 </div>
                 <Link
+                  to="/how"
+                  onClick={() => setMenuOpen(false)}
+                  className="px-1 pt-1 text-xs text-faint hover:text-fg"
+                >
+                  How it works
+                </Link>
+                <Link
                   to="/legal"
                   onClick={() => setMenuOpen(false)}
                   className="px-1 pt-1 text-xs text-faint hover:text-fg"
@@ -306,7 +327,9 @@ export function Layout() {
         </main>
       </div>
 
-      <BottomNav />
+      {/* Hidden while the menu overlay is open: the tab bar would otherwise paint
+          above the menu's bottom rows (both z-40, nav is a later sibling). */}
+      {!menuOpen && <BottomNav />}
       <WelcomeModal />
     </div>
   );

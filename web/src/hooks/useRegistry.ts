@@ -19,7 +19,10 @@ export function useClaimFee() {
   return useReadContract({
     ...registry,
     functionName: "claimFee",
-    query: { enabled: ADDRESSES_READY },
+    // The owner can change the fee on-chain (setClaimFee). A stale cached value
+    // makes the claim button show the wrong price AND send too little wei, which
+    // reverts with INSUFFICIENT_FEE — so keep this one fresh.
+    query: { enabled: ADDRESSES_READY, refetchInterval: 30_000 },
   });
 }
 

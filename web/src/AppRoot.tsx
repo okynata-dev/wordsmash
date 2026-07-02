@@ -8,6 +8,7 @@ import { wagmiConfig, activeChain } from "./wagmi";
 import { PRIVY_APP_ID, PRIVY_ENABLED } from "./config";
 import { ToastProvider } from "./components/Toast";
 import { ConnectModalProvider } from "./components/ConnectModal";
+import { WalletPanelProvider } from "./components/WalletPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { App } from "./App";
 
@@ -46,9 +47,13 @@ function Inner() {
   return (
     <ToastProvider>
       <ConnectModalProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        {/* App-level so the panel never renders inside the sticky header (its
+            backdrop-filter would clip the fixed overlay) and survives menu closes. */}
+        <WalletPanelProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </WalletPanelProvider>
       </ConnectModalProvider>
     </ToastProvider>
   );

@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { useBalance, useSendTransaction } from "wagmi";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { useAccount, useBalance, useSendTransaction } from "wagmi";
 import { usePrivy, useFundWallet } from "@privy-io/react-auth";
 import { baseSepolia } from "wagmi/chains";
 import { isAddress, parseEther, formatEther, type Address } from "viem";
@@ -12,10 +18,39 @@ import { shortAddr, friendlyError } from "../lib/format";
 
 const FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet?network=base-sepolia";
 
+// ── app-level mount ─────────────────────────────────────────────────────────
+// The panel must NOT render inside the sticky header: its backdrop-filter makes
+// the header a containing block for fixed descendants (the "fullscreen" panel
+// would be squashed into the header strip), and closing the mobile menu would
+// unmount the panel mid-send. So the open state lives in this provider, mounted
+// once near the app root, and buttons anywhere call `useWalletPanel().open()`.
+const WalletPanelCtx = createContext<{ open: () => void }>({ open: () => {} });
+
+export function useWalletPanel() {
+  return useContext(WalletPanelCtx);
+}
+
+export function WalletPanelProvider({ children }: { children: ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { address } = useAccount();
+
+  // Disconnecting while the panel is open -> close it.
+  useEffect(() => {
+    if (!address) setIsOpen(false);
+  }, [address]);
+
+  return (
+    <WalletPanelCtx.Provider value={{ open: () => setIsOpen(true) }}>
+      {children}
+      {isOpen && address && <WalletPanel address={address} onClose={() => setIsOpen(false)} />}
+    </WalletPanelCtx.Provider>
+  );
+}
+
 /** Account wallet panel: balance, deposit (on-ramp / receive), send (withdraw),
     and — for the Privy embedded wallet — export to another wallet. Reachable from
     the account menu. Send is irreversible, so it goes through a review step. */
-export function WalletPanel({ address, onClose }: { address: Address; onClose: () => void }) {
+function WalletPanel({ address, onClose }: { address: Address; onClose: () => void }) {
   const toast = useToast();
   const { data: bal } = useBalance({ address });
   const balanceEth = bal ? Number(formatEther(bal.value)) : 0;
@@ -78,7 +113,12 @@ export function WalletPanel({ address, onClose }: { address: Address; onClose: (
           </div>
         </div>
 
-        <SendOrReview address={address} balanceEth={balanceEth} explorer={explorer} toastClose={onClose} />
+        <SendOrReview
+          balWei={bal?.value ?? 0n}
+          balanceEth={balanceEth}
+          explorer={explorer}
+          toastClose={onClose}
+        />
 
         {PRIVY_ENABLED && (
           <PrivyWalletActions address={address} isTestnet={isTestnet} />
@@ -101,12 +141,12 @@ export function WalletPanel({ address, onClose }: { address: Address; onClose: (
 
 /** Send (withdraw) form with a review step before the irreversible send. */
 function SendOrReview({
-  address,
+  balWei,
   balanceEth,
   explorer,
   toastClose,
 }: {
-  address: Address;
+  balWei: bigint;
   balanceEth: number;
   explorer?: string;
   toastClose: () => void;
@@ -119,8 +159,15 @@ function SendOrReview({
   const [review, setReview] = useState(false);
 
   const toValid = isAddress(to);
-  const amountNum = Number(amount);
-  const amountValid = amount !== "" && amountNum > 0 && amountNum <= balanceEth;
+  // Validate in wei (exact), not floats — float compare misjudges near-max sends.
+  const amountWei = (() => {
+    try {
+      return parseEther(amount);
+    } catch {
+      return null;
+    }
+  })();
+  const amountValid = amount !== "" && amountWei !== null && amountWei > 0n && amountWei <= balWei;
   const canReview = toValid && amountValid;
 
   function reset() {
@@ -131,8 +178,17 @@ function SendOrReview({
   }
 
   function doSend() {
+    // parseEther throws on inputs like ">18 decimals" — surface it, don't die silently.
+    let value: bigint;
+    try {
+      value = parseEther(amount);
+    } catch {
+      toast.error("Invalid amount.");
+      setReview(false);
+      return;
+    }
     sendTransaction(
-      { to: to as Address, value: parseEther(amount) },
+      { to: to as Address, value },
       {
         onSuccess: (hash) => {
           toast.success("Sent");
@@ -190,7 +246,9 @@ function SendOrReview({
             />
             {amount !== "" && !amountValid && (
               <p className="mt-1 text-xs text-negative">
-                {amountNum > balanceEth ? "More than your balance." : "Enter an amount."}
+                {amountWei !== null && amountWei > balWei
+                  ? "More than your balance."
+                  : "Enter an amount."}
               </p>
             )}
           </div>
@@ -244,7 +302,11 @@ function PrivyWalletActions({ address, isTestnet }: { address: Address; isTestne
   const { user, exportWallet } = usePrivy();
   const { fundWallet } = useFundWallet();
   const [busy, setBusy] = useState<"deposit" | "export" | null>(null);
-  const isEmbedded = user?.wallet?.walletClientType === "privy";
+  // Export applies to THIS panel's wallet: it must be the Privy embedded one, not
+  // just "the user has an embedded wallet somewhere" while MetaMask is active.
+  const isEmbedded =
+    user?.wallet?.walletClientType === "privy" &&
+    user.wallet.address?.toLowerCase() === address.toLowerCase();
 
   async function onDeposit() {
     setBusy("deposit");
@@ -270,6 +332,8 @@ function PrivyWalletActions({ address, isTestnet }: { address: Address; isTestne
 
   // On a testnet there's no fiat on-ramp — funding is the faucet + receiving to the
   // address (shown above). So only offer Deposit (on-ramp / transfer) on mainnet.
+  // Nothing to show (testnet + external wallet) -> render nothing, not an empty row.
+  if (isTestnet && !isEmbedded) return null;
   return (
     <div className="mt-2 flex gap-2">
       {!isTestnet && (

@@ -101,10 +101,25 @@ export function EditProfile({
     website: useId(),
   };
 
-  const [username, setUsername] = useState(meta.username ?? "");
-  const [bio, setBio] = useState(meta.bio ?? "");
+  // Connect X (linkTwitter) is a full-page redirect: any unsaved fields would be
+  // lost. They're stashed in sessionStorage right before the redirect and restored
+  // (once) here when the user comes back.
+  const draftKey = `keepney.profileDraft.${address.toLowerCase()}`;
+  const [draft] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(draftKey);
+      if (!raw) return null;
+      sessionStorage.removeItem(draftKey);
+      return JSON.parse(raw) as { username?: string; bio?: string; website?: string };
+    } catch {
+      return null;
+    }
+  });
+
+  const [username, setUsername] = useState(draft?.username ?? meta.username ?? "");
+  const [bio, setBio] = useState(draft?.bio ?? meta.bio ?? "");
   const [twitter, setTwitter] = useState(meta.twitterHandle ?? "");
-  const [website, setWebsite] = useState(meta.website ?? "");
+  const [website, setWebsite] = useState(draft?.website ?? meta.website ?? "");
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [presetBusy, setPresetBusy] = useState<number | null>(null);
@@ -284,7 +299,18 @@ export function EditProfile({
           </p>
         </Field>
 
-        <TwitterField htmlFor={ids.twitter} value={twitter} onChange={setTwitter} />
+        <TwitterField
+          htmlFor={ids.twitter}
+          value={twitter}
+          onChange={setTwitter}
+          onBeforeLink={() => {
+            try {
+              sessionStorage.setItem(draftKey, JSON.stringify({ username, bio, website }));
+            } catch {
+              /* private mode etc. — worst case the fields are lost, as before */
+            }
+          }}
+        />
 
         <Field label="Website" htmlFor={ids.website}>
           <input
@@ -338,12 +364,15 @@ function TwitterField({
   htmlFor,
   value,
   onChange,
+  onBeforeLink,
 }: {
   htmlFor: string;
   value: string;
   onChange: (v: string) => void;
+  onBeforeLink?: () => void;
 }) {
-  if (PRIVY_ENABLED) return <TwitterConnect value={value} onChange={onChange} />;
+  if (PRIVY_ENABLED)
+    return <TwitterConnect value={value} onChange={onChange} onBeforeLink={onBeforeLink} />;
   return (
     <Field label="X / Twitter" htmlFor={htmlFor} hint="handle without @">
       <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-fg/40">
@@ -365,8 +394,17 @@ function TwitterField({
 
 /** Connect the real X account via Privy OAuth — the handle can't be typed/faked,
     it comes from the verified link. Save persists it to the profile. */
-function TwitterConnect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function TwitterConnect({
+  value,
+  onChange,
+  onBeforeLink,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBeforeLink?: () => void;
+}) {
   const { user, linkTwitter, unlinkTwitter } = usePrivy();
+  const toast = useToast();
   const linked = user?.twitter?.username ?? null;
   const subject = user?.twitter?.subject ?? null;
 
@@ -393,8 +431,13 @@ function TwitterConnect({ value, onChange }: { value: string; onChange: (v: stri
             type="button"
             onClick={async () => {
               if (!subject) return;
-              await unlinkTwitter(subject);
-              onChange("");
+              try {
+                await unlinkTwitter(subject);
+                onChange("");
+              } catch (e) {
+                // Privy refuses to unlink a user's only login method — say so.
+                toast.error(friendlyError(e));
+              }
             }}
             className="text-xs text-muted hover:text-fg"
           >
@@ -404,7 +447,10 @@ function TwitterConnect({ value, onChange }: { value: string; onChange: (v: stri
       ) : (
         <button
           type="button"
-          onClick={() => linkTwitter()}
+          onClick={() => {
+            onBeforeLink?.(); // full-page redirect follows — stash unsaved fields
+            linkTwitter();
+          }}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium transition hover:border-[rgb(var(--c-volt))]"
         >
           <XGlyph /> Connect X

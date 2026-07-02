@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useConnectWallet } from "@privy-io/react-auth";
 import { PRIVY_ENABLED } from "../config";
 import { friendlyError } from "../lib/format";
 import { useToast } from "./Toast";
@@ -32,10 +32,17 @@ export function ConnectModalProvider({ children }: { children: ReactNode }) {
 /** Privy-backed: `open()` opens Privy's full login modal (email/Google/X + wallets). */
 function PrivyConnect({ children }: { children: ReactNode }) {
   const { ready, authenticated, login, logout } = usePrivy();
+  const { connectWallet } = useConnectWallet();
   const value: Ctx = {
-    // Guard against opening before Privy is ready or when already signed in.
     open: () => {
-      if (ready && !authenticated) login();
+      if (!ready) return;
+      if (!authenticated) {
+        login();
+      } else {
+        // Privy session alive but no wagmi wallet (e.g. the external wallet was
+        // disconnected on its own side) — reconnect a wallet instead of a dead no-op.
+        connectWallet();
+      }
     },
     close: () => {},
     signOut: () => {

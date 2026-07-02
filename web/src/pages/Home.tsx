@@ -14,6 +14,7 @@ import { WhitelistGate } from "../components/WhitelistGate";
 import { useConnectModal } from "../components/ConnectModal";
 import { WalletButton } from "../components/WalletButton";
 import { LiveBadge } from "../components/ActivityFeed";
+import { HowStrip } from "../components/HowStrip";
 import { DiscoveryBoard } from "../components/DiscoveryBoard";
 import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
@@ -252,6 +253,9 @@ export function Home() {
           )}
         </div>
       </section>
+
+      {/* The money loop in one glance. */}
+      <HowStrip />
 
       {/* The buzz — a live wall of claimed words. */}
       <WordGrid />

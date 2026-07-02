@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { useProfile } from "../hooks/useProfile";
@@ -31,6 +31,19 @@ export function Profile() {
   const { data, isLoading, isError, refetch } = useProfile(address);
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<Tab>("owned");
+
+  // Returning from the Connect X redirect: a stashed edit draft means the user was
+  // mid-edit — reopen the editor so the linked handle + restored fields get saved.
+  useEffect(() => {
+    if (!isSelf) return;
+    try {
+      if (sessionStorage.getItem(`keepney.profileDraft.${address.toLowerCase()}`)) {
+        setEditing(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [isSelf, address]);
 
   const meta = data?.meta;
   const displayName = meta?.username ? `@${meta.username}` : shortAddr(address);
