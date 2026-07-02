@@ -40,7 +40,22 @@ set +u; source ./.env; set -u
 DEPLOYER_PK="$DEPLOYER_PRIVATE_KEY"
 DEPLOYER_ADDR=$(cast wallet address "$DEPLOYER_PK")
 
-send() { cast send --rpc-url "$RPC" --private-key "$1" "${@:2}" >/dev/null; }
+# Robust send: the public Base Sepolia RPC is load-balanced across nodes with
+# slightly different views, so rapid sequential sends can read a stale nonce
+# ("nonce too low") or hit a transient 429/5xx. cast waits for the receipt, so a
+# failed attempt didn't broadcast — retry (re-reading the nonce) is safe.
+send() {
+  local pk="$1"; shift
+  local i=0 out
+  while :; do
+    if out=$(cast send --rpc-url "$RPC" --private-key "$pk" "$@" 2>&1); then return 0; fi
+    if echo "$out" | grep -qiE "nonce too low|already known|replacement transaction|timed out|timeout|-32000|429|50[0-9]"; then
+      i=$((i+1)); if [ "$i" -ge 8 ]; then echo "  ! send failed after retries: $(echo "$out" | tail -1)"; return 1; fi
+      sleep 4; continue
+    fi
+    echo "  ! send failed: $(echo "$out" | tail -1)"; return 1
+  done
+}
 call() { cast call --rpc-url "$RPC" "$@"; }
 
 # Live claim fee (wei) — strip cast's " [1e15]" annotation if present.
@@ -92,7 +107,14 @@ fi
 
 echo ""
 echo "== Funding actors =="
+FUND_MIN_WEI=$(cast to-wei 0.004 ether)
 for ((i=0;i<N;i++)); do
+  # Idempotent: skip actors that are already funded (safe re-runs after a hiccup).
+  abal=$(cast balance "${ACTOR_ADDR[$i]}" --rpc-url "$RPC")
+  abal=$(cast --to-dec "$abal" 2>/dev/null || echo "$abal")
+  if [[ "$abal" -ge $(cast --to-dec "$FUND_MIN_WEI") ]]; then
+    echo "  ~ actor$i already funded, skip"; continue
+  fi
   echo "  actor$i ${ACTOR_ADDR[$i]}"
   send "$DEPLOYER_PK" "${ACTOR_ADDR[$i]}" --value "$FUND_PER_ACTOR"
 done
@@ -115,7 +137,7 @@ echo "== Cross-buys (actors buy OTHER people's word tokens) =="
 BUYS=( "4:base" "3:onchain" "0:degen" "1:alpha" "2:moon" "4:diamond" "0:wagmi" )
 for pair in "${BUYS[@]}"; do
   ai="${pair%%:*}"; w="${pair##*:}"
-  mkt=$(call "$REGISTRY" "marketOf(string)(address)" "$w")
+  mkt=$(call "$REGISTRY" "marketOf(string)(address)" "$w" | awk '{print $1}')
   if [[ "$mkt" == 0x0000000000000000000000000000000000000000 ]]; then echo "  ! no market for $w, skip"; continue; fi
   echo "  \$ actor$ai buys \$$w"
   send "${ACTOR_PK[$ai]}" "$mkt" "buy(uint256)" 0 --value "$BUY_AMT"
@@ -126,10 +148,10 @@ echo "== A couple of sells (shows red flow + accrues deed fees) =="
 SELLS=( "4:base" "0:degen" )
 for pair in "${SELLS[@]}"; do
   ai="${pair%%:*}"; w="${pair##*:}"
-  mkt=$(call "$REGISTRY" "marketOf(string)(address)" "$w")
-  bal=$(call "$mkt" "balanceOf(address)(uint256)" "${ACTOR_ADDR[$ai]}")
-  bal=$(cast --to-dec "$bal" 2>/dev/null || echo "$bal")
-  if [[ "$bal" -le 0 ]]; then echo "  ! actor$ai holds no \$$w, skip"; continue; fi
+  mkt=$(call "$REGISTRY" "marketOf(string)(address)" "$w" | awk '{print $1}')
+  # cast annotates uint256 output as "<dec> [1.2e3]" — keep only the decimal.
+  bal=$(call "$mkt" "balanceOf(address)(uint256)" "${ACTOR_ADDR[$ai]}" | awk '{print $1}')
+  if [[ "${bal:-0}" -le 0 ]]; then echo "  ! actor$ai holds no \$$w, skip"; continue; fi
   half=$(( bal / 2 ))
   echo "  - actor$ai sells half of \$$w"
   send "${ACTOR_PK[$ai]}" "$mkt" "sell(uint256,uint256)" "$half" 0
@@ -141,7 +163,7 @@ echo "== List two deeds for sale (populates the For-sale strip) =="
 LISTINGS=( "1:wagmi:0.02" "2:mint:0.05" )
 for trip in "${LISTINGS[@]}"; do
   IFS=':' read -r ai w price <<< "$trip"
-  tid=$(call "$REGISTRY" "tokenIdOf(string)(uint256)" "$w")
+  tid=$(call "$REGISTRY" "tokenIdOf(string)(uint256)" "$w" | awk '{print $1}')
   echo "  ^ actor$ai lists '$w' for $price ETH"
   send "${ACTOR_PK[$ai]}" "$REGISTRY" "approve(address,uint256)" "$MARKETPLACE" "$tid"
   send "${ACTOR_PK[$ai]}" "$MARKETPLACE" "list(uint256,uint256)" "$tid" "$(cast to-wei "$price" ether)"
@@ -149,6 +171,6 @@ done
 
 echo ""
 echo "== DONE =="
-echo "Total words now: $(call "$REGISTRY" "totalWords()(uint256)")"
+echo "Total words now: $(call "$REGISTRY" "totalWords()(uint256)" | awk '{print $1}')"
 echo "Indexer cron runs every ~1 min; the site should light up shortly:"
 echo "  https://keepney.com"
