@@ -22,6 +22,7 @@ import {
 import {
   profileUpdateMessage,
   avatarUploadMessage,
+  sha256Hex,
   commentMessage,
   watchlistMessage,
   SIG_TTL_MS,
@@ -43,21 +44,21 @@ async function sign(account: typeof acct1, message: string): Promise<`0x${string
 describe("verifySigned", () => {
   it("accepts a good signature within TTL", async () => {
     const ts = Date.now();
-    const msg = avatarUploadMessage(ADDR1, ts);
+    const msg = avatarUploadMessage(ADDR1, ts, "deadbeef");
     const sig = await sign(acct1, msg);
     await expect(verifySigned(msg, ADDR1, sig, ts)).resolves.toBeUndefined();
   });
 
   it("rejects a signature from the wrong signer", async () => {
     const ts = Date.now();
-    const msg = avatarUploadMessage(ADDR1, ts);
+    const msg = avatarUploadMessage(ADDR1, ts, "deadbeef");
     const sig = await sign(acct2, msg); // signed by acct2, claims acct1
     await expect(verifySigned(msg, ADDR1, sig, ts)).rejects.toBeInstanceOf(AuthError);
   });
 
   it("rejects an expired timestamp", async () => {
     const ts = Date.now() - SIG_TTL_MS - 1000;
-    const msg = avatarUploadMessage(ADDR1, ts);
+    const msg = avatarUploadMessage(ADDR1, ts, "deadbeef");
     const sig = await sign(acct1, msg);
     await expect(verifySigned(msg, ADDR1, sig, ts)).rejects.toBeInstanceOf(AuthError);
   });
@@ -282,8 +283,8 @@ describe("avatar (local-dev fallback)", () => {
   it("stores the data URL inline when no R2 binding is present", async () => {
     const db = await freshDb();
     const ts = Date.now();
-    const msg = avatarUploadMessage(ADDR1, ts);
     const dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+    const msg = avatarUploadMessage(ADDR1, ts, await sha256Hex(dataUrl));
     const res = await uploadAvatar(db, ADDR1, { dataUrl, timestamp: ts, signature: await sign(acct1, msg) }, {});
     expect(res.avatarUrl).toBe(dataUrl);
     const p = await getProfile(db, ADDR1);

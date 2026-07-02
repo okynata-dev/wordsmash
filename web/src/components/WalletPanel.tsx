@@ -5,16 +5,25 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useAccount, useBalance, useSendTransaction } from "wagmi";
+import {
+  useAccount,
+  useBalance,
+  useReadContract,
+  useSendTransaction,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 import { usePrivy, useFundWallet } from "@privy-io/react-auth";
 import { baseSepolia } from "wagmi/chains";
 import { isAddress, parseEther, formatEther, type Address } from "viem";
 import { activeChain } from "../wagmi";
-import { PRIVY_ENABLED } from "../config";
+import { PRIVY_ENABLED, ADDRESSES_READY } from "../config";
+import { marketplaceAddress, deedMarketplaceAbi } from "../contracts";
 import { Avatar } from "./Avatar";
 import { Button, Spinner } from "./ui";
 import { useToast } from "./Toast";
-import { shortAddr, friendlyError } from "../lib/format";
+import { shortAddr, friendlyError, ethLabel } from "../lib/format";
+import { useReceiptError } from "../hooks/useReceiptError";
 
 const FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet?network=base-sepolia";
 
@@ -52,14 +61,19 @@ export function WalletPanelProvider({ children }: { children: ReactNode }) {
     the account menu. Send is irreversible, so it goes through a review step. */
 function WalletPanel({ address, onClose }: { address: Address; onClose: () => void }) {
   const toast = useToast();
-  const { data: bal } = useBalance({ address });
+  // Refetch while open: the panel can sit open across a trade/claim and must not
+  // show a stale balance in a money UI.
+  const { data: bal } = useBalance({ address, query: { refetchInterval: 12_000 } });
   const balanceEth = bal ? Number(formatEther(bal.value)) : 0;
   const isTestnet = activeChain.id === baseSepolia.id;
   const explorer = activeChain.blockExplorers?.default?.url;
 
   async function copyAddress() {
     try {
-      await navigator.clipboard?.writeText(address);
+      // No optional chaining: clipboard undefined must land in catch, not report
+      // a false "copied" for the deposit-address path.
+      if (!navigator.clipboard) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(address);
       toast.success("Address copied");
     } catch {
       toast.error("Couldn’t copy address");
@@ -113,6 +127,8 @@ function WalletPanel({ address, onClose }: { address: Address; onClose: () => vo
           </div>
         </div>
 
+        <MarketplaceProceeds address={address} />
+
         <SendOrReview
           balWei={bal?.value ?? 0n}
           balanceEth={balanceEth}
@@ -135,6 +151,63 @@ function WalletPanel({ address, onClose }: { address: Address; onClose: () => vo
           </a>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Deed-sale proceeds (and buy-overpayment refunds) sit in the marketplace as a
+ * pull balance — the contract never pushes ETH. Without this section that money
+ * was simply unreachable from the app. Hidden at zero.
+ */
+function MarketplaceProceeds({ address }: { address: Address }) {
+  const toast = useToast();
+  const { data: pending, refetch } = useReadContract({
+    address: marketplaceAddress,
+    abi: deedMarketplaceAbi,
+    functionName: "pendingWithdrawals",
+    args: [address],
+    query: { enabled: ADDRESSES_READY, refetchInterval: 15_000 },
+  });
+  const owed = (pending as bigint | undefined) ?? 0n;
+
+  const { writeContract, data: hash, isPending } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash });
+  useReceiptError(receipt, "The withdrawal");
+  useEffect(() => {
+    if (receipt.isSuccess) {
+      toast.success("Withdrawn to your wallet");
+      void refetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receipt.isSuccess]);
+
+  if (owed <= 0n) return null;
+  const busy = isPending || receipt.isLoading;
+
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-2 p-4">
+      <div>
+        <p className="text-xs text-muted">Marketplace proceeds</p>
+        <p className="text-base font-semibold tabular-nums">{ethLabel(owed)}</p>
+      </div>
+      <Button
+        variant="outline"
+        disabled={busy}
+        onClick={() =>
+          writeContract(
+            {
+              address: marketplaceAddress,
+              abi: deedMarketplaceAbi,
+              functionName: "withdraw",
+              chainId: activeChain.id,
+            },
+            { onError: (e) => toast.error(friendlyError(e)) },
+          )
+        }
+      >
+        {busy ? <Spinner /> : "Withdraw"}
+      </Button>
     </div>
   );
 }
@@ -167,7 +240,17 @@ function SendOrReview({
       return null;
     }
   })();
-  const amountValid = amount !== "" && amountWei !== null && amountWei > 0n && amountWei <= balWei;
+  // Gas is paid on top, so a full-balance send always dies at estimation. Keep a
+  // small headroom (generous for an L2 transfer) so "send everything" fails here
+  // with words instead of later with a raw RPC error.
+  const GAS_HEADROOM = parseEther("0.00001");
+  const needsGasRoom =
+    amountWei !== null && amountWei > 0n && amountWei <= balWei && amountWei + GAS_HEADROOM > balWei;
+  const amountValid =
+    amount !== "" &&
+    amountWei !== null &&
+    amountWei > 0n &&
+    amountWei + GAS_HEADROOM <= balWei;
   const canReview = toValid && amountValid;
 
   function reset() {
@@ -188,10 +271,11 @@ function SendOrReview({
       return;
     }
     sendTransaction(
-      { to: to as Address, value },
+      { to: to as Address, value, chainId: activeChain.id },
       {
         onSuccess: (hash) => {
-          toast.success("Sent");
+          // The hash means submitted, not confirmed — don't overstate it.
+          toast.success("Submitted — track it on the explorer");
           reset();
           toastClose();
           if (explorer) window.open(`${explorer}/tx/${hash}`, "_blank", "noopener");
@@ -248,7 +332,9 @@ function SendOrReview({
               <p className="mt-1 text-xs text-negative">
                 {amountWei !== null && amountWei > balWei
                   ? "More than your balance."
-                  : "Enter an amount."}
+                  : needsGasRoom
+                    ? "Leave a little for gas."
+                    : "Enter an amount."}
               </p>
             )}
           </div>

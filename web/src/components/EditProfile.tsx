@@ -6,6 +6,7 @@ import { PRIVY_ENABLED } from "../config";
 import {
   profileUpdateMessage,
   avatarUploadMessage,
+  sha256Hex,
   normalizeUsername,
   validateUsername,
   sanitizeBio,
@@ -131,10 +132,11 @@ export function EditProfile({
   })();
 
   // Sign + upload a ready data URL (shared by file upload and preset picks).
+  // The message binds sha256(dataUrl) so the signature authorizes this exact image.
   async function commitAvatar(dataUrl: string) {
     if (!connected) return;
     const timestamp = Date.now();
-    const message = avatarUploadMessage(connected, timestamp);
+    const message = avatarUploadMessage(connected, timestamp, await sha256Hex(dataUrl));
     const signature = await signMessageAsync({ message });
     await api.uploadAvatar(connected, { dataUrl, timestamp, signature });
     await qc.invalidateQueries({ queryKey: profileKey(address) });
@@ -392,8 +394,11 @@ function TwitterField({
   );
 }
 
-/** Connect the real X account via Privy OAuth — the handle can't be typed/faked,
-    it comes from the verified link. Save persists it to the profile. */
+/** Connect the X account via Privy OAuth so the handle isn't hand-typed in THIS
+    editor. NOTE: the indexer still stores it as a plain self-attested field
+    (twitter_verified stays 0) — anyone can POST any handle with their own
+    signature. Don't promise "verified" anywhere until the indexer confirms the
+    link server-side via the Privy API. */
 function TwitterConnect({
   value,
   onChange,
@@ -417,12 +422,12 @@ function TwitterConnect({
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium">X / Twitter</span>
-        <span className="text-xs text-faint">verified by connecting</span>
+        <span className="text-xs text-faint">connect your account</span>
       </div>
       {linked ? (
         <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2">
           <span className="inline-flex items-center gap-1.5 text-sm">
-            <span className="text-positive" aria-label="Verified">
+            <span className="text-positive" aria-label="Connected">
               ✓
             </span>
             x.com/{linked}

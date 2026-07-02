@@ -1,7 +1,9 @@
 import { useEffect, type ReactNode } from "react";
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { registryAddress, wordRegistryAbi } from "../contracts";
+import { activeChain } from "../wagmi";
 import { useIsAllowed, useWhitelistEnabled } from "../hooks/useRegistry";
+import { useReceiptError } from "../hooks/useReceiptError";
 import { proofFor } from "../whitelist";
 import { Button, Card, Spinner } from "./ui";
 import { friendlyError } from "../lib/format";
@@ -29,7 +31,9 @@ export function WhitelistGate({
   const toast = useToast();
 
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = receipt;
+  useReceiptError(receipt, "Enrollment");
 
   useEffect(() => {
     if (isSuccess) {
@@ -86,6 +90,7 @@ export function WhitelistGate({
                 abi: wordRegistryAbi,
                 functionName: "verifyWhitelist",
                 args: [proof],
+                chainId: activeChain.id,
               },
               {
                 onError: (e) => toast.error(friendlyError(e)),

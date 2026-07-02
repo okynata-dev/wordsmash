@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
 import { Word } from "./pages/Word";
@@ -13,6 +13,16 @@ import { UserRoute } from "./pages/UserRoute";
 import { AddressGate } from "./components/AddressGate";
 import { ADDRESSES_READY } from "./config";
 
+/**
+ * Remount Word (and its whole tx state) per word. Without the key, navigating
+ * /word/a -> /word/b keeps OwnerControls mounted, and an in-flight approve for
+ * word A could chain into listing word B at A's stashed price.
+ */
+function WordKeyed() {
+  const { word = "" } = useParams();
+  return <Word key={word.toLowerCase()} />;
+}
+
 export function App() {
   // The prod pre-launch landing is handled in main.tsx (before the web3
   // providers load); here, !ADDRESSES_READY only happens in dev → show the
@@ -23,7 +33,7 @@ export function App() {
         {ADDRESSES_READY ? (
           <>
             <Route index element={<Home />} />
-            <Route path="word/:word" element={<Word />} />
+            <Route path="word/:word" element={<WordKeyed />} />
             <Route path="profile/:address" element={<Profile />} />
             <Route path="u/:username" element={<UserRoute />} />
             <Route path="market" element={<Market />} />

@@ -95,8 +95,30 @@ export function profileUpdateMessage(address: string, p: ProfileEditable, timest
   ].join("\n");
 }
 
-export function avatarUploadMessage(address: string, timestamp: number): string {
-  return `keepney: upload avatar\naddress: ${address.toLowerCase()}\nissued: ${timestamp}`;
+/**
+ * The signature must authorize THIS image, not "any avatar within the TTL":
+ * `contentHash` = sha256Hex(dataUrl) binds the payload, so a captured signed
+ * request can't be replayed with different image content.
+ */
+export function avatarUploadMessage(
+  address: string,
+  timestamp: number,
+  contentHash: string,
+): string {
+  return [
+    "keepney: upload avatar",
+    `address: ${address.toLowerCase()}`,
+    `content: ${contentHash}`,
+    `issued: ${timestamp}`,
+  ].join("\n");
+}
+
+/** sha256 hex of a string — WebCrypto, available in both the browser and Workers. */
+export async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export function commentMessage(address: string, word: string, body: string, timestamp: number): string {

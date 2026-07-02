@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useAccount,
+  useConfig,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
+import { readContract } from "wagmi/actions";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { marketplaceAddress, deedMarketplaceAbi } from "../contracts";
+import { activeChain } from "../wagmi";
+import { useReceiptError } from "../hooks/useReceiptError";
 import { Button, Card, Spinner, ErrorState, Skeleton } from "../components/ui";
 import { WhitelistGate } from "../components/WhitelistGate";
 import { UserBadge } from "../components/UserBadge";
@@ -85,8 +89,12 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
   const { address, isConnected } = useAccount();
   const wrongNetwork = useWrongNetwork();
   const toast = useToast();
+  const config = useConfig();
+  const [checking, setChecking] = useState(false);
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = receipt;
+  useReceiptError(receipt, "The purchase");
   const { sync, syncing } = useSyncAfterTx();
 
   const { data: whitelistEnabled } = useWhitelistEnabled();
@@ -134,6 +142,7 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
                 isPending ||
                 confirming ||
                 syncing ||
+                checking ||
                 isSuccess ||
                 sellerBlocked ||
                 priceBad ||
@@ -141,26 +150,59 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
               }
               onClick={() => {
                 if (tokenId === null || priceWei === null) return;
-                writeContract(
-                  {
-                    address: marketplaceAddress,
-                    abi: deedMarketplaceAbi,
-                    functionName: "buy",
-                    args: [tokenId],
-                    value: priceWei,
-                  },
-                  {
-                    onError: (e) => toast.error(friendlyError(e)),
-                    onSuccess: () => toast.info("Buying… confirm in your wallet"),
-                  },
-                );
+                // Verify the LIVE listing before paying: the contract accepts
+                // overpayment (excess goes to a pull balance), so a stale indexer
+                // price must never be sent as msg.value.
+                void (async () => {
+                  setChecking(true);
+                  let live: readonly [string, bigint, boolean];
+                  try {
+                    live = (await readContract(config, {
+                      address: marketplaceAddress,
+                      abi: deedMarketplaceAbi,
+                      functionName: "listings",
+                      args: [tokenId],
+                      chainId: activeChain.id,
+                    })) as readonly [string, bigint, boolean];
+                  } catch {
+                    setChecking(false);
+                    toast.error("Couldn’t verify the listing — try again.");
+                    return;
+                  }
+                  setChecking(false);
+                  const [, livePrice, active] = live;
+                  if (!active) {
+                    toast.error("This listing is no longer active.");
+                    onDone();
+                    return;
+                  }
+                  if (livePrice !== priceWei) {
+                    toast.error(`The price changed to ${ethLabel(livePrice)} — review before buying.`);
+                    onDone();
+                    return;
+                  }
+                  writeContract(
+                    {
+                      address: marketplaceAddress,
+                      abi: deedMarketplaceAbi,
+                      functionName: "buy",
+                      args: [tokenId],
+                      value: livePrice,
+                      chainId: activeChain.id,
+                    },
+                    {
+                      onError: (e) => toast.error(friendlyError(e)),
+                      onSuccess: () => toast.info("Buying… confirm in your wallet"),
+                    },
+                  );
+                })();
               }}
             >
               {isSuccess ? (
                 "Bought"
-              ) : isPending || confirming || syncing ? (
+              ) : isPending || confirming || syncing || checking ? (
                 <>
-                  <Spinner /> {syncing ? "Syncing…" : "Buying…"}
+                  <Spinner /> {syncing ? "Syncing…" : checking ? "Checking…" : "Buying…"}
                 </>
               ) : isSeller ? (
                 "Your listing"

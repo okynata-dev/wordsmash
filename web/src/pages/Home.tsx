@@ -9,6 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { normalizeWord } from "@shared/normalize";
 import { api } from "../api";
 import { registryAddress, wordRegistryAbi } from "../contracts";
+import { activeChain } from "../wagmi";
+import { useReceiptError } from "../hooks/useReceiptError";
 import { Button, Card, Spinner, Pill, Skeleton, ErrorState } from "../components/ui";
 import { WhitelistGate } from "../components/WhitelistGate";
 import { useConnectModal } from "../components/ConnectModal";
@@ -99,7 +101,9 @@ export function Home() {
   }, [raw, norm.ok, norm.normalized, norm.reason]);
 
   const { writeContract, data: hash, isPending, reset } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const claimReceipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = claimReceipt;
+  useReceiptError(claimReceipt, "The claim");
 
   // The exact word being claimed, captured at click time so navigation never depends
   // on the live input state (which re-checks and can change out from under us).
@@ -152,9 +156,13 @@ export function Home() {
         functionName: "claim",
         args: [state.normalized],
         value: (claimFee as bigint | undefined) ?? 0n,
+        chainId: activeChain.id,
       },
       {
-        onError: (e) => toast.error(friendlyError(e)),
+        onError: (e) => {
+          claimingWordRef.current = null;
+          toast.error(friendlyError(e));
+        },
         onSuccess: () => toast.info("Claiming… confirm in your wallet"),
       },
     );

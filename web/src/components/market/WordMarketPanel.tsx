@@ -6,7 +6,7 @@ import { api } from "../../api";
 import { Card, Pill, Skeleton } from "../ui";
 import { WhitelistGate } from "../WhitelistGate";
 import { WalletButton } from "../WalletButton";
-import { ethLabel, tokenLabel, normAddr } from "../../lib/format";
+import { ethLabel, tokenLabel, normAddr, toWei } from "../../lib/format";
 import { useWrongNetwork } from "../../hooks/useRegistry";
 import { asMarketAddress, useMarketReads, useTokenBalance } from "../../hooks/useMarket";
 import { PriceChart } from "./PriceChart";
@@ -60,13 +60,16 @@ export function WordMarketPanel({
   });
 
   // Live reads win over indexed values for the fields that move every trade.
-  const priceWei = reads.priceWei ?? (info ? BigInt(info.priceWei) : undefined);
-  const marketCapWei = reads.marketCapWei ?? (info ? BigInt(info.marketCapWei) : undefined);
-  const volumeWei = reads.volumeWei ?? (info ? BigInt(info.volumeWei) : undefined);
+  // Indexer strings go through toWei (null on garbage) — a malformed API value
+  // must degrade to a skeleton, not throw in render and trip the ErrorBoundary.
+  const priceWei = reads.priceWei ?? (info ? (toWei(info.priceWei) ?? undefined) : undefined);
+  const marketCapWei =
+    reads.marketCapWei ?? (info ? (toWei(info.marketCapWei) ?? undefined) : undefined);
+  const volumeWei = reads.volumeWei ?? (info ? (toWei(info.volumeWei) ?? undefined) : undefined);
   const graduated = reads.graduated ?? info?.graduated ?? false;
   const symbol = reads.symbol ?? info?.tokenSymbol;
   const deedOwner = reads.deedOwner ?? null;
-  const deedFeesWei = reads.deedFeesWei ?? (info ? BigInt(info.deedFeesWei) : 0n);
+  const deedFeesWei = reads.deedFeesWei ?? (info ? (toWei(info.deedFeesWei) ?? 0n) : 0n);
 
   // Graduation progress (the FOMO centerpiece). Indexed-only fields — guard for
   // older API snapshots that may omit them.

@@ -1,4 +1,4 @@
-import { useAccount, useReadContract, useChainId } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { registryAddress, wordRegistryAbi } from "../contracts";
 import { activeChain } from "../wagmi";
 import { ADDRESSES_READY } from "../config";
@@ -8,10 +8,14 @@ const registry = {
   abi: wordRegistryAbi,
 } as const;
 
-/** Whether the connected wallet is on the right network. */
+/**
+ * Whether the connected wallet is on the right network. Must read the chain from
+ * useAccount() (the live connection), NOT useChainId(): with a single configured
+ * chain, wagmi's config.state.chainId is pinned to it and never reflects the
+ * wallet drifting to another network — the check would be permanently false.
+ */
 export function useWrongNetwork(): boolean {
-  const { isConnected } = useAccount();
-  const chainId = useChainId();
+  const { isConnected, chainId } = useAccount();
   return isConnected && chainId !== activeChain.id;
 }
 

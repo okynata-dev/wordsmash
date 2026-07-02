@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { parseEther, parseUnits, type Address } from "viem";
+import { formatUnits, parseEther, parseUnits, type Address } from "viem";
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { wordMarketAbi } from "../../contracts";
+import { activeChain } from "../../wagmi";
+import { useReceiptError } from "../../hooks/useReceiptError";
 import { Button, Card, Spinner } from "../ui";
 import { useToast } from "../Toast";
-import {
-  ethLabel,
-  friendlyError,
-  formatTokens,
-  tokenLabel,
-} from "../../lib/format";
+import { ethLabel, friendlyError, tokenLabel } from "../../lib/format";
 import { useSyncAfterTx } from "../../hooks/useSyncAfterTx";
 import { useQuoteBuy, useQuoteSell, useTokenBalance } from "../../hooks/useMarket";
 import { tradesKey } from "./RecentTrades";
@@ -149,7 +146,9 @@ function BuyPanel({
   const toast = useToast();
   const [input, setInput] = useState("");
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = receipt;
+  useReceiptError(receipt, "The buy");
   const { sync, syncing } = useSyncAfterTx();
 
   // Parse the ETH amount; null on empty/invalid (never throws into render).
@@ -223,6 +222,7 @@ function BuyPanel({
               functionName: "buy",
               args: [minOut],
               value: ethWei,
+              chainId: activeChain.id,
             },
             {
               onError: (e) => toast.error(friendlyError(e)),
@@ -262,7 +262,9 @@ function SellPanel({
   const toast = useToast();
   const [input, setInput] = useState("");
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = receipt;
+  useReceiptError(receipt, "The sell");
   const { sync, syncing } = useSyncAfterTx();
 
   const { data: balance, refetch: refetchBalance } = useTokenBalance(market, account);
@@ -313,7 +315,7 @@ function SellPanel({
         onChange={setInput}
         suffix={symbol ?? "tokens"}
         invalid={invalid || overBalance}
-        onMax={bal > 0n ? () => setInput(formatTokens(bal).replace(/,/g, "")) : undefined}
+        onMax={bal > 0n ? () => setInput(formatUnits(bal, 18)) : undefined /* exact wei — the display formatter truncates and would strand dust */}
       />
       <p className="text-xs text-faint">
         Balance: {tokenLabel(bal, symbol)}
@@ -346,6 +348,7 @@ function SellPanel({
               abi: wordMarketAbi,
               functionName: "sell",
               args: [tokenWei, minOut],
+              chainId: activeChain.id,
             },
             {
               onError: (e) => toast.error(friendlyError(e)),

@@ -65,7 +65,8 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean } = {}
     const profilePath = `/profile/${normAddr(address)}`;
     async function copyAddress() {
       try {
-        await navigator.clipboard?.writeText(address!);
+        if (!navigator.clipboard) throw new Error("clipboard unavailable");
+        await navigator.clipboard.writeText(address!);
         toast.success("Address copied");
       } catch {
         toast.error("Couldn’t copy address");

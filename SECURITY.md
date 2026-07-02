@@ -98,6 +98,44 @@ Sources for the above incidents/classes are listed at the bottom.
   construction (state this as a feature).
 - "One word, one owner" deed + Merkle beta = native identity / sybil tooling most launchpads lack.
 
+## Internal audit findings — MUST fix before mainnet (2026-07-02 pass)
+
+Contract-level findings from the full internal audit (frontend items were fixed the same day;
+these need a redeploy, so they are queued for the mainnet contracts, not patched on the live
+testnet):
+
+1. **H: whitelist gates `sell()`** (`WordMarket.sol` sell → `registry.isAllowed`). The owner
+   can freeze every holder's ETH exit by revoking whitelist / re-enabling the global gate.
+   Exit must be permissionless: drop the check from `sell()`, keep it on `buy()`. Also move
+   ownership to a timelocked multisig.
+2. **M: marketplace `buy()` takes no `expectedPrice`** — a seller can front-run a buyer's tx
+   with `list(tokenId, higherPrice)` and the buy clears at the new price. Add
+   `buy(tokenId, expectedPrice)` + `require(l.price == expectedPrice)`. (The web app now
+   reads the live listing at click time and pays exactly it — mitigation, not a fix.)
+3. **M: stale-listing resurrection** — a listing survives the deed leaving and returning to
+   the seller (esp. with a lingering `setApprovalForAll`); old price becomes executable
+   again. Require re-list after any ownership change (listing epoch) or add a public
+   `reap(tokenId)`.
+4. **M: `liquidityFeesAccrued` is a dead pot** — 0.1% of every trade accrues with NO spend
+   path; ETH is stranded forever. Either fold it into `realEthReserve` or wire it to the
+   graduation/LP-migration path before mainnet.
+5. **M: unclaimed deed fees transfer with the deed** — selling the deed without `claimFees()`
+   donates the accrued pot to the buyer. Auto-settle to the seller on transfer, or keep as
+   documented behavior + UI warning (the web app now warns in the listing flow).
+6. **M: no pause switch** — add `Pausable` to `buy()` paths only (`sell()`/`withdraw()`/
+   `claimFees()` stay always-live so a pause can never trap funds).
+
+Frontend/API fixes shipped in the same pass: per-call `chainId` on every write (wrong-network
+sends were possible for external wallets), `useWrongNetwork` reads the live connection chain,
+marketplace pull-balance (`pendingWithdrawals`) withdraw UI, live-price check before deed buys,
+receipt-revert toasts everywhere, avatar signature now binds `sha256(dataUrl)`, replay guard
+canonicalizes signatures (casing + low-s), comment rate limit (20 / 10 min / address).
+
+Open (needs infra): server-side X-handle verification via the Privy API (indexer currently
+stores it self-attested with `twitter_verified = 0`; UI no longer says "verified").
+`showWalletUIs: false` keeps embedded-wallet signing silent app-wide — deliberate UX trade-off
+for testnet; revisit for mainnet (at minimum, show wallet UI for value-bearing txs).
+
 ## Before real funds (the v2 boundary)
 
 The per-word bonding-curve trading is **testnet-only** and gated behind a professional audit

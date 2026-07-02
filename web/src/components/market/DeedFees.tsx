@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import type { Address } from "viem";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { wordMarketAbi } from "../../contracts";
+import { activeChain } from "../../wagmi";
 import { Button, Card, Spinner } from "../ui";
 import { useToast } from "../Toast";
 import { ethLabel, friendlyError } from "../../lib/format";
 import { useSyncAfterTx } from "../../hooks/useSyncAfterTx";
+import { useReceiptError } from "../../hooks/useReceiptError";
 
 /**
  * Deed-holder cash-flow hook. Rendered only when the connected wallet is the deed
@@ -25,7 +27,9 @@ export function DeedFees({
 }) {
   const toast = useToast();
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = receipt;
+  useReceiptError(receipt, "The fee claim");
   const { sync, syncing } = useSyncAfterTx();
 
   useEffect(() => {
@@ -54,6 +58,7 @@ export function DeedFees({
               address: market,
               abi: wordMarketAbi,
               functionName: "claimFees",
+              chainId: activeChain.id,
             },
             {
               onError: (e) => toast.error(friendlyError(e)),

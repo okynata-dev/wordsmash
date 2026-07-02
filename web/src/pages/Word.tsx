@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { parseEther } from "viem";
+import { parseEther, type Address } from "viem";
 import {
   useAccount,
+  useConfig,
   useReadContract,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
+import { readContract } from "wagmi/actions";
 import { useQuery } from "@tanstack/react-query";
 import { normalizeWord } from "@shared/normalize";
 import { api } from "../api";
@@ -15,8 +17,12 @@ import {
   registryAddress,
   wordRegistryAbi,
   deedMarketplaceAbi,
+  wordMarketAbi,
   wordToTokenId,
 } from "../contracts";
+import { activeChain } from "../wagmi";
+import { asMarketAddress } from "../hooks/useMarket";
+import { useReceiptError } from "../hooks/useReceiptError";
 import { Button, Card, Pill, Spinner, ErrorState } from "../components/ui";
 import { ShareButton } from "../components/ShareButton";
 import { WhitelistGate } from "../components/WhitelistGate";
@@ -147,6 +153,7 @@ export function Word() {
                       tokenId={tokenId}
                       listed={Boolean(listing?.active)}
                       word={word}
+                      marketAddr={asMarketAddress(detail?.market?.market)}
                       onDone={refetch}
                     />
                   ) : listing?.active ? (
@@ -220,8 +227,12 @@ function BuyControl({
   onDone: () => void;
 }) {
   const toast = useToast();
+  const config = useConfig();
+  const [checking, setChecking] = useState(false);
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const { isLoading: confirming, isSuccess } = receipt;
+  useReceiptError(receipt, "The purchase");
   const { sync, syncing } = useSyncAfterTx();
 
   // Both parties must be whitelisted for the transfer to succeed.
@@ -247,31 +258,66 @@ function BuyControl({
   const priceWei = toWei(price);
   const priceBad = priceWei === null || priceWei < 0n;
 
+  // The contract accepts msg.value >= price and credits the excess to a pull
+  // balance — so a buy must never send a stale (indexer-snapshot) price. Read the
+  // live listing at click time: pay exactly it, and bail if it moved on the user.
+  async function buyNow() {
+    if (priceWei === null) return;
+    setChecking(true);
+    let live: readonly [string, bigint, boolean];
+    try {
+      live = (await readContract(config, {
+        address: marketplaceAddress,
+        abi: deedMarketplaceAbi,
+        functionName: "listings",
+        args: [tokenId],
+        chainId: activeChain.id,
+      })) as readonly [string, bigint, boolean];
+    } catch {
+      setChecking(false);
+      toast.error("Couldn’t verify the listing — try again.");
+      return;
+    }
+    setChecking(false);
+    const [, livePrice, active] = live;
+    if (!active) {
+      toast.error("This listing is no longer active.");
+      onDone();
+      return;
+    }
+    if (livePrice !== priceWei) {
+      toast.error(`The price changed to ${ethLabel(livePrice)} — review before buying.`);
+      onDone();
+      return;
+    }
+    writeContract(
+      {
+        address: marketplaceAddress,
+        abi: deedMarketplaceAbi,
+        functionName: "buy",
+        args: [tokenId],
+        value: livePrice,
+        chainId: activeChain.id,
+      },
+      {
+        onError: (e) => toast.error(friendlyError(e)),
+        onSuccess: () => toast.info("Buying… confirm in your wallet"),
+      },
+    );
+  }
+
   return (
     <Card className="flex flex-col items-center gap-2 p-5">
       <Button
         className="w-full sm:w-auto"
-        disabled={isPending || confirming || syncing || sellerBlocked || priceBad || loadingSeller}
-        onClick={() => {
-          if (priceWei === null) return;
-          writeContract(
-            {
-              address: marketplaceAddress,
-              abi: deedMarketplaceAbi,
-              functionName: "buy",
-              args: [tokenId],
-              value: priceWei,
-            },
-            {
-              onError: (e) => toast.error(friendlyError(e)),
-              onSuccess: () => toast.info("Buying… confirm in your wallet"),
-            },
-          );
-        }}
+        disabled={
+          isPending || confirming || syncing || checking || sellerBlocked || priceBad || loadingSeller
+        }
+        onClick={() => void buyNow()}
       >
-        {isPending || confirming || syncing ? (
+        {isPending || confirming || syncing || checking ? (
           <>
-            <Spinner /> {syncing ? "Syncing…" : "Buying…"}
+            <Spinner /> {syncing ? "Syncing…" : checking ? "Checking price…" : "Buying…"}
           </>
         ) : (
           `Buy · ${ethLabel(price)}`
@@ -295,17 +341,29 @@ function OwnerControls({
   tokenId,
   listed,
   word,
+  marketAddr,
   onDone,
 }: {
   tokenId: bigint;
   listed: boolean;
   word: string;
+  marketAddr?: Address;
   onDone: () => void;
 }) {
   const toast = useToast();
   const { address } = useAccount();
   const [priceInput, setPriceInput] = useState("");
   const { sync, syncing } = useSyncAfterTx();
+
+  // Unclaimed curve fees follow the DEED, not the seller: sell the word without
+  // claiming and the buyer inherits the accrued pot. Warn before any listing.
+  const { data: accruedFees } = useReadContract({
+    address: marketAddr,
+    abi: wordMarketAbi,
+    functionName: "deedFeesAccrued",
+    query: { enabled: Boolean(marketAddr), refetchInterval: 30_000 },
+  });
+  const unclaimedWei = (accruedFees as bigint | undefined) ?? 0n;
 
   // Is the marketplace approved to move THIS one token? We deliberately use per-token
   // approval (approve(tokenId)) rather than setApprovalForAll: listing one word must
@@ -326,11 +384,20 @@ function OwnerControls({
   const approveReceipt = useWaitForTransactionReceipt({ hash: approve.data });
   const listReceipt = useWaitForTransactionReceipt({ hash: list.data });
   const cancelReceipt = useWaitForTransactionReceipt({ hash: cancel.data });
+  useReceiptError(approveReceipt, "The approval");
+  useReceiptError(listReceipt, "The listing");
+  useReceiptError(cancelReceipt, "The cancel");
 
   // One-tap listing: approve (per-token) and list are chained so the user can't
-  // approve and then forget to actually list. The price to list at is stashed here
-  // while the approval confirms.
-  const pendingPriceRef = useRef<bigint | null>(null);
+  // approve and then forget to actually list. The stash carries the tokenId it was
+  // created for — the continue-effect must never list a DIFFERENT word (the route
+  // is remounted per word, but this guard must not depend on that).
+  const pendingListRef = useRef<{ tokenId: bigint; price: bigint } | null>(null);
+  useEffect(() => {
+    return () => {
+      pendingListRef.current = null; // never carry a stash across unmount
+    };
+  }, []);
 
   function listNow(price: bigint) {
     list.writeContract(
@@ -339,6 +406,7 @@ function OwnerControls({
         abi: deedMarketplaceAbi,
         functionName: "list",
         args: [tokenId, price],
+        chainId: activeChain.id,
       },
       {
         onError: (e) => toast.error(friendlyError(e)),
@@ -349,17 +417,18 @@ function OwnerControls({
 
   function submitListing(price: bigint) {
     if (needsApproval) {
-      pendingPriceRef.current = price; // list automatically once approval confirms
+      pendingListRef.current = { tokenId, price }; // list automatically once approval confirms
       approve.writeContract(
         {
           address: registryAddress,
           abi: wordRegistryAbi,
           functionName: "approve",
           args: [marketplaceAddress, tokenId],
+          chainId: activeChain.id,
         },
         {
           onError: (e) => {
-            pendingPriceRef.current = null;
+            pendingListRef.current = null;
             toast.error(friendlyError(e));
           },
           onSuccess: () => toast.info("Approving… confirm in your wallet"),
@@ -373,10 +442,10 @@ function OwnerControls({
   useEffect(() => {
     if (approveReceipt.isSuccess) {
       void refetchApproval();
-      const p = pendingPriceRef.current;
-      if (p !== null) {
-        pendingPriceRef.current = null;
-        listNow(p); // approval done -> immediately continue to the listing tx
+      const pending = pendingListRef.current;
+      pendingListRef.current = null;
+      if (pending !== null && pending.tokenId === tokenId) {
+        listNow(pending.price); // approval done -> immediately continue to the listing tx
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -403,6 +472,12 @@ function OwnerControls({
     return (
       <Card className="flex flex-col items-center gap-2 p-5">
         <p className="text-sm text-muted">You have this word listed for sale.</p>
+        {unclaimedWei > 0n && (
+          <p className="text-center text-xs text-warning">
+            You have {ethLabel(unclaimedWei)} of unclaimed trade fees. Claim them (in the
+            market panel above) before this sells — they go with the deed to the buyer.
+          </p>
+        )}
         <Button
           variant="danger"
           disabled={cancel.isPending || cancelReceipt.isLoading || syncing}
@@ -413,6 +488,7 @@ function OwnerControls({
                 abi: deedMarketplaceAbi,
                 functionName: "cancel",
                 args: [tokenId],
+                chainId: activeChain.id,
               },
               { onError: (e) => toast.error(friendlyError(e)) },
             )
@@ -438,9 +514,16 @@ function OwnerControls({
   }
   const priceInvalid = priceInput.trim() !== "" && (parsedPrice === null || parsedPrice <= 0n);
 
+  // undefined = the approval read hasn't answered yet. Block submission until it
+  // has: treating "loading" as "needs approval" would fire a redundant approve tx
+  // (silently signed on the embedded wallet).
+  const approvalKnown = approvedAddr !== undefined;
   const needsApproval =
     (approvedAddr as string | undefined)?.toLowerCase() !== marketplaceAddress.toLowerCase();
   const priceInputId = "list-price-input";
+  const approving = approve.isPending || approveReceipt.isLoading;
+  const listingBusy = list.isPending || listReceipt.isLoading || syncing;
+  const busy = approving || listingBusy;
 
   return (
     <Card className="space-y-3 p-5">
@@ -456,34 +539,34 @@ function OwnerControls({
           placeholder="price in ETH"
           aria-label="List price in ETH"
           aria-invalid={priceInvalid}
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-fg/40"
+          disabled={busy /* the chained list uses the price captured at click — editing mid-chain must not look like it counts */}
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-fg/40 disabled:opacity-60"
         />
-        {(() => {
-          const approving = approve.isPending || approveReceipt.isLoading;
-          const listing = list.isPending || listReceipt.isLoading || syncing;
-          const busy = approving || listing;
-          return (
-            <Button
-              disabled={!parsedPrice || priceInvalid || busy}
-              onClick={() => parsedPrice && submitListing(parsedPrice)}
-            >
-              {approving ? (
-                <>
-                  <Spinner /> Approving…
-                </>
-              ) : listing ? (
-                <>
-                  <Spinner /> {syncing ? "Syncing…" : "Listing…"}
-                </>
-              ) : (
-                "List for sale"
-              )}
-            </Button>
-          );
-        })()}
+        <Button
+          disabled={!parsedPrice || priceInvalid || busy || !approvalKnown}
+          onClick={() => parsedPrice && submitListing(parsedPrice)}
+        >
+          {approving ? (
+            <>
+              <Spinner /> Approving…
+            </>
+          ) : listingBusy ? (
+            <>
+              <Spinner /> {syncing ? "Syncing…" : "Listing…"}
+            </>
+          ) : (
+            "List for sale"
+          )}
+        </Button>
       </div>
       {priceInvalid && <p className="text-xs text-negative">Enter a positive ETH amount.</p>}
-      {needsApproval && (
+      {unclaimedWei > 0n && (
+        <p className="text-xs text-warning">
+          You have {ethLabel(unclaimedWei)} of unclaimed trade fees. Claim them (in the
+          market panel above) before selling — they go with the deed to the buyer.
+        </p>
+      )}
+      {approvalKnown && needsApproval && (
         <p className="text-xs text-muted">
           First listing approves the marketplace for just this one word — it can&apos;t
           touch your other words. Two quick confirmations, then it&apos;s live.

@@ -17,6 +17,7 @@ import {
   normalizeWebsite,
   profileUpdateMessage,
   avatarUploadMessage,
+  sha256Hex,
   commentMessage,
   watchlistMessage,
   generatedAvatar,
@@ -99,19 +100,33 @@ export async function verifySigned(
  * cannot be re-submitted. Call AFTER verifySigned (which TTL-bounds the timestamp). Old rows are
  * pruned opportunistically — a signature past the TTL is rejected by verifySigned anyway.
  */
+// secp256k1 n/2 — signatures with s above this are the malleated twin of a
+// canonical signature (same signer, different bytes) and must be rejected, or
+// the consume-once guard below can be bypassed by re-submitting the twin.
+const SECP256K1_HALF_N = BigInt(
+  "0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0",
+);
+
 export async function enforceFreshness(
   db: Db,
   signature: `0x${string}`,
   timestamp: number,
 ): Promise<void> {
+  // Canonicalize before the dedup lookup: hex casing and ECDSA malleability both
+  // produce "different" strings that recover to the same signer.
+  const sig = (signature ?? "").toLowerCase();
+  if (!/^0x[0-9a-f]{130}$/.test(sig)) throw new AuthError("bad signature format");
+  if (BigInt(`0x${sig.slice(66, 130)}`) > SECP256K1_HALF_N) {
+    throw new AuthError("non-canonical signature");
+  }
   const seen = await db
     .prepare("SELECT 1 AS x FROM consumed_sigs WHERE sig = ?")
-    .bind(signature)
+    .bind(sig)
     .first<{ x: number }>();
   if (seen) throw new AuthError("replayed request");
   await db
     .prepare("INSERT OR IGNORE INTO consumed_sigs (sig, ts) VALUES (?, ?)")
-    .bind(signature, timestamp)
+    .bind(sig, timestamp)
     .run();
   // prune signatures older than the TTL (they can never validate again)
   await db.prepare("DELETE FROM consumed_sigs WHERE ts < ?").bind(Date.now() - SIG_TTL_MS).run();
@@ -376,10 +391,9 @@ export async function uploadAvatar(
 ): Promise<{ avatarUrl: string }> {
   const address = addressLower;
   const timestamp = Number(body.timestamp);
-  const message = avatarUploadMessage(address, timestamp);
-  await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
-  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
+  // Validate the payload BEFORE signature work: the signed message binds
+  // sha256(dataUrl), so the exact received content must rebuild the message.
   const dataUrl = body.dataUrl;
   if (typeof dataUrl !== "string" || !AVATAR_MIME_RE_PLAIN.test(dataUrl)) {
     throw new HttpError(400, "dataUrl must be data:image/(png|jpeg|webp)");
@@ -388,6 +402,10 @@ export async function uploadAvatar(
   if (dataUrl.length > AVATAR_MAX_BYTES * 2 + 1024) {
     throw new HttpError(413, "avatar too large");
   }
+
+  const message = avatarUploadMessage(address, timestamp, await sha256Hex(dataUrl));
+  await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
   let avatarUrl: string;
   if (env.AVATARS) {
@@ -529,6 +547,17 @@ export async function postComment(
   const message = commentMessage(address, word, text, timestamp);
   await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
   await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
+
+  // Rate limit: signatures are free to mint, so the replay guard alone doesn't
+  // bound spam. Cap comments per author per 10-minute window.
+  const COMMENT_RATE_LIMIT = 20;
+  const recent = await db
+    .prepare("SELECT COUNT(*) AS n FROM comments WHERE author = ? AND ts > ?")
+    .bind(address, Date.now() - 10 * 60 * 1000)
+    .first<{ n: number }>();
+  if ((recent?.n ?? 0) >= COMMENT_RATE_LIMIT) {
+    throw new HttpError(429, "too many comments — slow down");
+  }
 
   // Resolve the token id for this word (may be null if unclaimed).
   const wordRow = await db
