@@ -5,8 +5,9 @@ import {
   handleTransfer,
   handleListed,
   handleSale,
+  handleTrade,
 } from "../src/handlers.js";
-import { getCheck, getStats, getWordDetail, getMarket } from "../src/api.js";
+import { getCheck, getStats, getWordDetail, getMarket, getWordCandles } from "../src/api.js";
 import { getProfile } from "../src/social.js";
 import type { Db } from "../src/db.js";
 
@@ -115,5 +116,38 @@ describe("GET /market", () => {
     expect(market.map((l) => l.word)).toEqual(["milk"]);
     expect(market[0].price).toBe("7000");
     expect(market[0].active).toBe(true);
+  });
+});
+
+describe("GET /word/:word/candles", () => {
+  const MKT = "0x00000000000000000000000000000000000000aa";
+
+  async function seedTrades(db: Db): Promise<void> {
+    await handleTransfer(db, { from: A.zero, to: A.alice, tokenId: 9n }, { tx: "0xa0", logIndex: 0, ts: 100 });
+    await handleWordClaimed(db, { word: "coffee", tokenId: 9n, owner: A.alice, market: MKT }, { tx: "0xa0", logIndex: 1, ts: 100 });
+    // Bucket 1 (res=300: t=0): three trades — open 100, high 150, low 90, close 90.
+    await handleTrade(db, { market: MKT, trader: A.alice, isBuy: true, ethWei: 10n, tokenAmount: 1n, priceWei: 100n }, { tx: "0xa1", logIndex: 0, ts: 100 });
+    await handleTrade(db, { market: MKT, trader: A.bob, isBuy: true, ethWei: 20n, tokenAmount: 1n, priceWei: 150n }, { tx: "0xa2", logIndex: 0, ts: 200 });
+    await handleTrade(db, { market: MKT, trader: A.bob, isBuy: false, ethWei: 5n, tokenAmount: 1n, priceWei: 90n }, { tx: "0xa3", logIndex: 0, ts: 290 });
+    // Bucket 2 (t=600): one trade at 120.
+    await handleTrade(db, { market: MKT, trader: A.carol, isBuy: true, ethWei: 7n, tokenAmount: 1n, priceWei: 120n }, { tx: "0xa4", logIndex: 0, ts: 650 });
+  }
+
+  it("aggregates OHLC + volume per bucket, opens at the previous close", async () => {
+    const db = await freshDb();
+    await seedTrades(db);
+    const candles = await getWordCandles(db, "COFFEE", "300");
+    expect(candles.length).toBe(2);
+    expect(candles[0]).toEqual({ t: 0, o: "100", h: "150", l: "90", c: "90", v: "35", n: 3 });
+    // Second candle opens at the previous close (90), not its own first trade.
+    expect(candles[1]).toEqual({ t: 600, o: "90", h: "120", l: "90", c: "120", v: "7", n: 1 });
+  });
+
+  it("falls back to res=300 on a bogus resolution and returns [] for unknown words", async () => {
+    const db = await freshDb();
+    await seedTrades(db);
+    const bogus = await getWordCandles(db, "coffee", "123");
+    expect(bogus.length).toBe(2);
+    expect(await getWordCandles(db, "ghost", "300")).toEqual([]);
   });
 });

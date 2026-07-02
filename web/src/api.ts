@@ -17,6 +17,7 @@ import type {
   ActivityRow,
   TradeRow,
   PricePoint,
+  Candle,
 } from "@shared/types";
 import type { Comment } from "@shared/social";
 import {
@@ -128,6 +129,10 @@ export const api = {
 
   /** GET /word/:word/chart -> price history points for the inline chart. */
   chart: (word: string) => getList<PricePoint>(`/word/${encodeURIComponent(word)}/chart`),
+
+  /** GET /word/:word/candles?res= -> OHLC candles for the trading chart. */
+  candles: (word: string, res: number) =>
+    getList<Candle>(`/word/${encodeURIComponent(word)}/candles?res=${res}`),
 
   /** GET /profile/:address -> meta + owned words, listings, activity, stats. */
   profile: async (address: string): Promise<Profile> => {

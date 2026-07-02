@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import type { MarketInfo } from "@shared/types";
-import { api } from "../../api";
 import { Card, Pill, Skeleton } from "../ui";
 import { WhitelistGate } from "../WhitelistGate";
 import { WalletButton } from "../WalletButton";
 import { ethLabel, tokenLabel, normAddr, toWei } from "../../lib/format";
 import { useWrongNetwork } from "../../hooks/useRegistry";
 import { asMarketAddress, useMarketReads, useTokenBalance } from "../../hooks/useMarket";
-import { PriceChart } from "./PriceChart";
 import { TradeBox } from "./TradeBox";
 import { DeedFees } from "./DeedFees";
 import { RecentTrades } from "./RecentTrades";
+
+// lightweight-charts ships in its own chunk — loaded only when a market renders.
+const TradingChart = lazy(() => import("./TradingChart"));
 
 /**
  * The coin/trading view for a claimed word. Composes the price header, an inline
@@ -51,13 +51,6 @@ export function WordMarketPanel({
     void reads.refetch?.();
     void balanceQuery.refetch?.();
   }
-
-  const chart = useQuery({
-    queryKey: ["chart", word],
-    queryFn: () => api.chart(word),
-    retry: 1,
-    enabled: Boolean(info),
-  });
 
   // Live reads win over indexed values for the fields that move every trade.
   // Indexer strings go through toWei (null on garbage) — a malformed API value
@@ -146,14 +139,10 @@ export function WordMarketPanel({
           />
         </Card>
 
-        {/* Price chart */}
-        {chart.isLoading ? (
-          <Skeleton className="h-[120px] w-full rounded-xl" />
-        ) : (
-          <Card className="fade-up p-3" style={{ animationDelay: "60ms" }}>
-            <PriceChart points={chart.data ?? []} />
-          </Card>
-        )}
+        {/* Trading chart (candles + volume) */}
+        <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-xl" />}>
+          <TradingChart word={word} />
+        </Suspense>
 
         {/* Recent trades */}
         <RecentTrades word={word} symbol={symbol} />

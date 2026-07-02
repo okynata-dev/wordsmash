@@ -7,6 +7,7 @@ import {
   getWordDetail,
   getWordTrades,
   getWordChart,
+  getWordCandles,
   getCheck,
   getStats,
   getMarket,
@@ -220,6 +221,12 @@ export default {
       if (parts[0] === "word" && parts[1] != null && parts[2] === "chart") {
         const word = decodeURIComponent(parts[1]);
         return json(await getWordChart(db, word));
+      }
+
+      // /word/:word/candles?res=  (OHLC for the trading chart)
+      if (parts[0] === "word" && parts[1] != null && parts[2] === "candles") {
+        const word = decodeURIComponent(parts[1]);
+        return json(await getWordCandles(db, word, url.searchParams.get("res")));
       }
 
       if (parts[0] === "word" && parts[1] != null) {

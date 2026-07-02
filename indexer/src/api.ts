@@ -12,6 +12,7 @@ import type {
   MarketInfo,
   TradeRow,
   PricePoint,
+  Candle,
   Stats,
   CheckResult,
   Paginated,
@@ -416,6 +417,99 @@ export async function getWordChart(db: Db, rawWord: string): Promise<PricePoint[
   return results
     .map((r) => ({ ts: Number(r.ts ?? 0), priceWei: r.price_wei ?? "0" }))
     .reverse();
+}
+
+// GET /word/:word/candles?res= -> OHLC candles for the trading chart, oldest->newest.
+// `res` is the bucket size in seconds, whitelisted; volumes summed with BigInt.
+export const CANDLE_RESOLUTIONS = [60, 300, 900, 3600, 14400, 86400] as const;
+const CANDLE_TRADE_CAP = 5_000; // aggregate at most this many most-recent trades
+
+export async function getWordCandles(
+  db: Db,
+  rawWord: string,
+  resParam: string | null,
+): Promise<Candle[]> {
+  const res = Number(resParam ?? 300);
+  if (!CANDLE_RESOLUTIONS.includes(res as (typeof CANDLE_RESOLUTIONS)[number])) {
+    return getWordCandles(db, rawWord, "300");
+  }
+  const norm = normalizeWord(rawWord);
+  const word = norm.ok ? norm.normalized : rawWord.toLowerCase();
+
+  const wordRow = await db
+    .prepare("SELECT token_id FROM words WHERE word = ?")
+    .bind(word)
+    .first<{ token_id: string }>();
+  if (!wordRow) return [];
+
+  // Newest CANDLE_TRADE_CAP trades, then reverse to oldest->newest for aggregation.
+  const { results } = await db
+    .prepare(
+      `SELECT ts, price_wei, eth_wei FROM trades WHERE token_id = ?
+       ORDER BY ts DESC, id DESC LIMIT ?`,
+    )
+    .bind(wordRow.token_id, CANDLE_TRADE_CAP)
+    .all<{ ts: number; price_wei: string; eth_wei: string }>();
+
+  const toBig = (s: string | null | undefined): bigint => {
+    try {
+      return BigInt(s ?? "0");
+    } catch {
+      return 0n;
+    }
+  };
+
+  const candles: Candle[] = [];
+  let cur: { t: number; o: bigint; h: bigint; l: bigint; c: bigint; v: bigint; n: number } | null =
+    null;
+  for (const r of [...results].reverse()) {
+    const price = toBig(r.price_wei);
+    const eth = toBig(r.eth_wei);
+    const t = Math.floor(Number(r.ts ?? 0) / res) * res;
+    if (cur === null || cur.t !== t) {
+      if (cur !== null) {
+        candles.push({
+          t: cur.t,
+          o: cur.o.toString(),
+          h: cur.h.toString(),
+          l: cur.l.toString(),
+          c: cur.c.toString(),
+          v: cur.v.toString(),
+          n: cur.n,
+        });
+      }
+      // Open at the previous close (standard charting), so candles chain visually
+      // even when buckets are sparse; the very first candle opens at its own trade.
+      const open = cur !== null ? cur.c : price;
+      cur = {
+        t,
+        o: open,
+        h: open > price ? open : price,
+        l: open < price ? open : price,
+        c: price,
+        v: eth,
+        n: 1,
+      };
+    } else {
+      if (price > cur.h) cur.h = price;
+      if (price < cur.l) cur.l = price;
+      cur.c = price;
+      cur.v += eth;
+      cur.n += 1;
+    }
+  }
+  if (cur !== null) {
+    candles.push({
+      t: cur.t,
+      o: cur.o.toString(),
+      h: cur.h.toString(),
+      l: cur.l.toString(),
+      c: cur.c.toString(),
+      v: cur.v.toString(),
+      n: cur.n,
+    });
+  }
+  return candles;
 }
 
 // GET /profile/:address lives in social.ts (it now joins the off-chain profiles row).

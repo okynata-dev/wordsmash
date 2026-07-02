@@ -76,6 +76,18 @@ export interface PricePoint {
   priceWei: string;
 }
 
+/** OHLC candle for the trading chart. Prices are wei strings; `t` is the bucket
+    start (unix seconds); `v` is the ETH volume (wei) traded in the bucket. */
+export interface Candle {
+  t: number;
+  o: string;
+  h: string;
+  l: string;
+  c: string;
+  v: string;
+  n: number; // trades in the bucket
+}
+
 export interface WordDetail {
   word: string;
   tokenId: string;
