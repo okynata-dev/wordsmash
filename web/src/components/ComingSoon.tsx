@@ -51,7 +51,7 @@ export function ComingSoon() {
   }
 
   function share() {
-    const text = word ? `I’m claiming the word “${word}”.` : `Claim a word. Own it forever.`;
+    const text = word ? `I’m keeping the word “${word}”.` : `Keep a word on keepney.`;
     const url = `https://${HOST}`;
     const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
     if (nav.share) {
@@ -85,9 +85,7 @@ export function ComingSoon() {
 
       <main className="mx-auto flex w-full max-w-[620px] flex-1 flex-col items-center justify-center px-6 pb-24 text-center">
         <h1 className="fade-up text-balance text-4xl font-semibold leading-[1.04] tracking-tight sm:text-[56px]">
-          Claim {word ? <span className="break-all text-accent">“{word}”</span> : "a word"}.
-          <br />
-          Own it forever.
+          Keep {word ? <span className="break-all text-accent">“{word}”</span> : "a word"}.
         </h1>
 
         {!claimed ? (

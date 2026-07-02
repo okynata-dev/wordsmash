@@ -173,6 +173,9 @@ function BuyPanel({
     if (isSuccess) {
       toast.success("Bought");
       setInput("");
+      // Immediately refresh on-chain reads (your position + price) so the buy shows
+      // the instant it confirms; then again once the indexer catches up (chart/trades).
+      onTraded();
       void sync([["word", word], ["chart", word], tradesKey(word)]).then(onTraded);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -290,6 +293,8 @@ function SellPanel({
       toast.success("Sold");
       setInput("");
       void refetchBalance();
+      // Immediate on-chain refresh (position + price), then again after indexer sync.
+      onTraded();
       void sync([["word", word], ["chart", word], tradesKey(word)]).then(onTraded);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

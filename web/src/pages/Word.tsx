@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { parseEther } from "viem";
 import {
@@ -87,9 +87,6 @@ export function Word() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="word-display text-5xl leading-none sm:text-6xl">{display}</h1>
-            <p className="mt-3.5 max-w-[46ch] text-sm text-muted">
-              The only <span className="font-medium text-fg">{display}</span> there will ever be.
-            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {tokenId !== null && !isDemo && <WatchButton tokenId={tokenId.toString()} />}
@@ -109,7 +106,6 @@ export function Word() {
           ) : (
             <Pill tone="positive">unclaimed</Pill>
           )}
-          <Pill>1 of 1 · forever</Pill>
         </div>
       </Card>
 
@@ -122,7 +118,7 @@ export function Word() {
       {!owner && !isLoading && !isError && (
         <Card className="mt-5 p-5 text-center text-sm text-muted">
           No one owns “{display}” yet.{" "}
-          <Link to="/" className="text-fg underline">
+          <Link to={`/?claim=${encodeURIComponent(word)}`} className="text-fg underline">
             Claim it
           </Link>
           .
@@ -311,12 +307,15 @@ function OwnerControls({
   const [priceInput, setPriceInput] = useState("");
   const { sync, syncing } = useSyncAfterTx();
 
-  // Is the marketplace approved to move this token? (operator approval or per-token)
-  const { data: approvedForAll, refetch: refetchApproval } = useReadContract({
+  // Is the marketplace approved to move THIS one token? We deliberately use per-token
+  // approval (approve(tokenId)) rather than setApprovalForAll: listing one word must
+  // never grant the marketplace access to the seller's OTHER words. list() accepts a
+  // per-token approval, and it survives until the deed sells, so buy() still works.
+  const { data: approvedAddr, refetch: refetchApproval } = useReadContract({
     address: registryAddress,
     abi: wordRegistryAbi,
-    functionName: "isApprovedForAll",
-    args: address ? [address, marketplaceAddress] : undefined,
+    functionName: "getApproved",
+    args: [tokenId],
     query: { enabled: Boolean(address) },
   });
 
@@ -328,10 +327,57 @@ function OwnerControls({
   const listReceipt = useWaitForTransactionReceipt({ hash: list.data });
   const cancelReceipt = useWaitForTransactionReceipt({ hash: cancel.data });
 
+  // One-tap listing: approve (per-token) and list are chained so the user can't
+  // approve and then forget to actually list. The price to list at is stashed here
+  // while the approval confirms.
+  const pendingPriceRef = useRef<bigint | null>(null);
+
+  function listNow(price: bigint) {
+    list.writeContract(
+      {
+        address: marketplaceAddress,
+        abi: deedMarketplaceAbi,
+        functionName: "list",
+        args: [tokenId, price],
+      },
+      {
+        onError: (e) => toast.error(friendlyError(e)),
+        onSuccess: () => toast.info("Listing… confirm in your wallet"),
+      },
+    );
+  }
+
+  function submitListing(price: bigint) {
+    if (needsApproval) {
+      pendingPriceRef.current = price; // list automatically once approval confirms
+      approve.writeContract(
+        {
+          address: registryAddress,
+          abi: wordRegistryAbi,
+          functionName: "approve",
+          args: [marketplaceAddress, tokenId],
+        },
+        {
+          onError: (e) => {
+            pendingPriceRef.current = null;
+            toast.error(friendlyError(e));
+          },
+          onSuccess: () => toast.info("Approving… confirm in your wallet"),
+        },
+      );
+    } else {
+      listNow(price);
+    }
+  }
+
   useEffect(() => {
     if (approveReceipt.isSuccess) {
-      toast.success("Marketplace approved");
       void refetchApproval();
+      const p = pendingPriceRef.current;
+      if (p !== null) {
+        pendingPriceRef.current = null;
+        listNow(p); // approval done -> immediately continue to the listing tx
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approveReceipt.isSuccess]);
@@ -392,7 +438,8 @@ function OwnerControls({
   }
   const priceInvalid = priceInput.trim() !== "" && (parsedPrice === null || parsedPrice <= 0n);
 
-  const needsApproval = approvedForAll !== true;
+  const needsApproval =
+    (approvedAddr as string | undefined)?.toLowerCase() !== marketplaceAddress.toLowerCase();
   const priceInputId = "list-price-input";
 
   return (
@@ -411,65 +458,35 @@ function OwnerControls({
           aria-invalid={priceInvalid}
           className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-fg/40"
         />
-        {needsApproval ? (
-          <Button
-            disabled={approve.isPending || approveReceipt.isLoading}
-            onClick={() =>
-              approve.writeContract(
-                {
-                  address: registryAddress,
-                  abi: wordRegistryAbi,
-                  functionName: "setApprovalForAll",
-                  args: [marketplaceAddress, true],
-                },
-                {
-                  onError: (e) => toast.error(friendlyError(e)),
-                  onSuccess: () => toast.info("Approving… confirm in your wallet"),
-                },
-              )
-            }
-          >
-            {approve.isPending || approveReceipt.isLoading ? (
-              <>
-                <Spinner /> Approving…
-              </>
-            ) : (
-              "Approve"
-            )}
-          </Button>
-        ) : (
-          <Button
-            disabled={!parsedPrice || priceInvalid || list.isPending || listReceipt.isLoading || syncing}
-            onClick={() =>
-              parsedPrice &&
-              list.writeContract(
-                {
-                  address: marketplaceAddress,
-                  abi: deedMarketplaceAbi,
-                  functionName: "list",
-                  args: [tokenId, parsedPrice],
-                },
-                {
-                  onError: (e) => toast.error(friendlyError(e)),
-                  onSuccess: () => toast.info("Listing… confirm in your wallet"),
-                },
-              )
-            }
-          >
-            {list.isPending || listReceipt.isLoading || syncing ? (
-              <>
-                <Spinner /> {syncing ? "Syncing…" : "Listing…"}
-              </>
-            ) : (
-              "List"
-            )}
-          </Button>
-        )}
+        {(() => {
+          const approving = approve.isPending || approveReceipt.isLoading;
+          const listing = list.isPending || listReceipt.isLoading || syncing;
+          const busy = approving || listing;
+          return (
+            <Button
+              disabled={!parsedPrice || priceInvalid || busy}
+              onClick={() => parsedPrice && submitListing(parsedPrice)}
+            >
+              {approving ? (
+                <>
+                  <Spinner /> Approving…
+                </>
+              ) : listing ? (
+                <>
+                  <Spinner /> {syncing ? "Syncing…" : "Listing…"}
+                </>
+              ) : (
+                "List for sale"
+              )}
+            </Button>
+          );
+        })()}
       </div>
       {priceInvalid && <p className="text-xs text-negative">Enter a positive ETH amount.</p>}
       {needsApproval && (
         <p className="text-xs text-muted">
-          One-time: approve the marketplace to transfer your word on sale.
+          First listing approves the marketplace for just this one word — it can&apos;t
+          touch your other words. Two quick confirmations, then it&apos;s live.
         </p>
       )}
     </Card>

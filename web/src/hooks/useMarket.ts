@@ -39,7 +39,8 @@ export function useMarketReads(market?: string | null) {
           { ...base, functionName: "marketCapWei" },
         ]
       : [],
-    query: { enabled: ADDRESSES_READY && Boolean(address) },
+    // Poll so price / market cap / volume stay live even when someone else trades.
+    query: { enabled: ADDRESSES_READY && Boolean(address), refetchInterval: 12_000 },
   });
 
   const r = query.data;
@@ -66,7 +67,11 @@ export function useTokenBalance(market?: string | null, account?: Address) {
     abi: wordMarketAbi,
     functionName: "balanceOf",
     args: account ? [account] : undefined,
-    query: { enabled: ADDRESSES_READY && Boolean(address) && Boolean(account) },
+    // Poll so "Your position" stays live; a trade also refetches this immediately.
+    query: {
+      enabled: ADDRESSES_READY && Boolean(address) && Boolean(account),
+      refetchInterval: 12_000,
+    },
   });
 }
 

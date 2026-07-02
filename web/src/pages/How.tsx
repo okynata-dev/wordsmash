@@ -27,7 +27,7 @@ export function How() {
       <section className="mt-10 space-y-6">
         <Step n="1" title="Keep a word">
           Type a word. If it&rsquo;s free, it&rsquo;s yours for {fee}. One transaction
-          mints a 1-of-1 deed (an NFT that proves you own the word) and deploys the
+          mints its deed (an NFT that proves you own the word) and deploys the
           word&rsquo;s own token market. No setup, no liquidity to provide.
         </Step>
 
@@ -38,7 +38,7 @@ export function How() {
           is ever locked in. DEX migration for graduated markets is on the roadmap.
         </Step>
 
-        <Step n="3" title="The deed earns, forever">
+        <Step n="3" title="The deed earns on every trade">
           Every buy and sell pays a 1% fee, split three ways: 0.4% to the deed holder,
           0.5% to the protocol, 0.1% retained in the curve as liquidity. Hold the deed
           of a busy word and you earn on every single trade. Deeds themselves can be

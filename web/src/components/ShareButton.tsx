@@ -20,7 +20,7 @@ export function ShareButton({
 }) {
   const toast = useToast();
   const url = shareUrl(word);
-  const text = `I kept "${word}". Only one will ever exist.`;
+  const text = `I kept "${word}" on keepney — it has its own token now.`;
 
   async function onShare() {
     // Prefer the native share sheet on supporting (mobile) browsers.

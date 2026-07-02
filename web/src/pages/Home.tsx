@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   useAccount,
   useWaitForTransactionReceipt,
@@ -33,7 +33,18 @@ export function Home() {
   const [raw, setRaw] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
+
+  // Deep-link from a word page's "Claim it": /?claim=<word> pre-fills the input and
+  // focuses it, so the user is one tap from keeping the word they were just looking at.
+  useEffect(() => {
+    const w = searchParams.get("claim");
+    if (!w) return;
+    setRaw(w);
+    window.setTimeout(() => document.getElementById("claim-word-input")?.focus(), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Smash feedback — the visceral core of the brand. Firing increments a key that
   // remounts the particle burst and toggles a brief screen-shake on the hero.
@@ -90,21 +101,27 @@ export function Home() {
   const { writeContract, data: hash, isPending, reset } = useWriteContract();
   const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
+  // The exact word being claimed, captured at click time so navigation never depends
+  // on the live input state (which re-checks and can change out from under us).
+  const claimingWordRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (isSuccess && state.kind !== "idle") {
-      const w = "normalized" in state ? state.normalized : raw;
-      fireSmash(); // celebration burst the moment the claim lands
-      toast.success(`Claimed "${w}"`);
-      void refetchRemaining();
-      // Prime caches and wait out indexer lag before navigating, so the word page
-      // doesn't briefly render a stale "unclaimed" state for the word we just claimed.
-      void sync([["stats"], ["activity"], ["word", w]], { attempts: 2, intervalMs: 1200 }).then(
-        () => {
-          navigate(`/word/${encodeURIComponent(w)}`);
-          reset();
-        },
-      );
-    }
+    if (!isSuccess) return;
+    const w = claimingWordRef.current ?? ("normalized" in state ? state.normalized : raw);
+    if (!w) return;
+    fireSmash(); // celebration burst the moment the claim lands
+    toast.success(`Kept "${w}"`);
+    void refetchRemaining();
+    // Prime caches to ride out indexer lag, then ALWAYS land on the word's page so
+    // the user sees their new token + can trade it. Navigation must not hinge on the
+    // sync resolving — a rejected/slow sync used to strand the user on the home page.
+    sync([["stats"], ["activity"], ["word", w]], { attempts: 2, intervalMs: 1200 })
+      .catch(() => {})
+      .finally(() => {
+        claimingWordRef.current = null;
+        reset();
+        navigate(`/word/${encodeURIComponent(w)}`);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuccess]);
 
@@ -127,6 +144,7 @@ export function Home() {
       return;
     }
     fireSmash(); // instant tactile feedback on intent, before the wallet round-trip
+    claimingWordRef.current = state.normalized; // remember what we're claiming for post-tx nav
     writeContract(
       {
         address: registryAddress,
@@ -177,11 +195,10 @@ export function Home() {
           on every keystroke; claiming fires a particle burst + impact shake. */}
       <section className={`fade-up mb-10 ${shake ? "smash-shake" : ""}`}>
         <h1 className="font-display text-balance text-[30px] font-semibold leading-[1.05] tracking-tight sm:text-[40px]">
-          Keep a <span className="text-volt">word</span>.{" "}
-          <span className="text-muted">Own it forever.</span>
+          Keep a <span className="text-volt">word</span>.
         </h1>
         <p className="mt-2 text-[15px] text-muted">
-          One word, one owner. You earn every time it trades.
+          Every word gets its own token. You earn on every trade.
         </p>
 
         {/* Live word preview — only while typing, modest + left-aligned (no giant idle splash). */}

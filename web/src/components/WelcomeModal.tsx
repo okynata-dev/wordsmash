@@ -78,8 +78,8 @@ export function WelcomeModal() {
           Welcome to <span className="text-volt">keepney</span>
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          Keep a word and it’s yours. One tap mints a 1-of-1 deed and spins up the word’s own
-          token. One word, one owner, forever. You earn every time it trades.
+          Keep a word and it’s yours. One tap mints its deed and spins up the word’s own
+          token. You earn on every trade.
         </p>
 
         <p className="mt-4 rounded-lg bg-surface-2 px-4 py-3 text-xs leading-relaxed text-muted">

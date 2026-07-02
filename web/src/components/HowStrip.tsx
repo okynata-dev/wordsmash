@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 const STEPS = [
-  { n: "1", t: "Keep a word", d: "One tap mints its 1-of-1 deed." },
+  { n: "1", t: "Keep a word", d: "One tap mints its deed." },
   { n: "2", t: "Its market goes live", d: "Every word ships with its own token." },
   { n: "3", t: "You earn on every trade", d: "0.4% of all volume goes to the deed holder." },
 ];

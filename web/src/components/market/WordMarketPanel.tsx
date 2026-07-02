@@ -40,8 +40,17 @@ export function WordMarketPanel({
 
   const marketAddr = asMarketAddress(info?.market);
   const reads = useMarketReads(info?.market);
-  const { data: balanceRaw } = useTokenBalance(info?.market, address);
-  const balance = (balanceRaw as bigint | undefined) ?? 0n;
+  const balanceQuery = useTokenBalance(info?.market, address);
+  const balance = (balanceQuery.data as bigint | undefined) ?? 0n;
+
+  // After a trade / fee claim, refresh the INDEXER-derived word detail (onChanged)
+  // AND the live on-chain reads (price, market cap, the wallet's balance) right away
+  // — so "Your position" reflects the buy the instant it confirms, no page refresh.
+  function handleChanged() {
+    onChanged();
+    void reads.refetch?.();
+    void balanceQuery.refetch?.();
+  }
 
   const chart = useQuery({
     queryKey: ["chart", word],
@@ -163,7 +172,7 @@ export function WordMarketPanel({
               symbol={symbol}
               word={word}
               buyFrozen={graduated}
-              onTraded={onChanged}
+              onTraded={handleChanged}
             />
           </WhitelistGate>
         )}
@@ -186,7 +195,7 @@ export function WordMarketPanel({
 
         {/* Deed-holder fees (cash-flow hook) */}
         {isDeedOwner && (
-          <DeedFees market={marketAddr} word={word} feesWei={deedFeesWei} onClaimed={onChanged} />
+          <DeedFees market={marketAddr} word={word} feesWei={deedFeesWei} onClaimed={handleChanged} />
         )}
 
         {/* About this market — real indexed/live fields. */}

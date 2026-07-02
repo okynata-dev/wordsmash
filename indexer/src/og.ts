@@ -25,7 +25,7 @@ export function ogSvg(rawWord: string): string {
   <rect width="1200" height="630" fill="#000000"/>
   <rect x="20" y="20" width="1160" height="590" fill="none" stroke="#ffffff" stroke-width="2"/>
   <text x="600" y="320" fill="#ffffff" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="800" text-anchor="middle" letter-spacing="-2">${display}</text>
-  <text x="600" y="470" fill="#888888" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="30" letter-spacing="2" text-anchor="middle">only one will ever exist · keepney</text>
+  <text x="600" y="470" fill="#888888" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="30" letter-spacing="2" text-anchor="middle">keep a word · keepney</text>
 </svg>`;
 }
 
@@ -39,7 +39,7 @@ export function shareHtml(rawWord: string, selfOrigin: string, webAppBase: strin
   const word = norm.ok ? norm.normalized : rawWord.toLowerCase().slice(0, 30);
   const ticker = toTicker(word);
   const title = escapeXml(`$${ticker} · keepney`);
-  const desc = escapeXml(`${word} — only one will ever exist. Keep it on keepney.`);
+  const desc = escapeXml(`Keep and trade "${word}" on keepney — its own token, one owner.`);
   const ogImage = `${selfOrigin}/og/${encodeURIComponent(word)}`;
   const wordUrl = `${webAppBase.replace(/\/$/, "")}/word/${encodeURIComponent(word)}`;
   const safeWordUrl = escapeXml(wordUrl);
