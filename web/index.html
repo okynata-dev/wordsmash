@@ -6,7 +6,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="theme-color" content="#fafafa" />
+    <script>
+      // Apply the saved theme before first paint (light is the default).
+      try {
+        if (localStorage.getItem("keepney.theme") === "dark") {
+          document.documentElement.classList.add("dark");
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#09090b");
+        }
+      } catch (e) {}
+    </script>
 
     <title>Keepney</title>
     <meta name="description" content="Keep a word on Base. Every word gets its own token, and you earn on every trade." />

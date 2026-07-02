@@ -31,21 +31,21 @@
     "Helvetica Neue", Inter, ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --c-bg: 9 9 11;
-    --c-surface: 24 24 27;
-    --c-surface-2: 32 32 36;
-    --c-border: 39 39 42;
-    --c-fg: 244 244 245;
-    --c-muted: 161 161 170;
-    --c-faint: 113 113 122;
-    --c-accent: 244 244 245;
-    --c-accent-fg: 9 9 11;
-    --c-positive: 134 239 172;
-    --c-negative: 252 165 165;
-    --c-warning: 253 224 71;
-  }
+/* Dark theme — opt-in via the `.dark` class on <html> (see src/theme.ts).
+   Light is the default regardless of the OS setting. */
+:root.dark {
+  --c-bg: 9 9 11;
+  --c-surface: 24 24 27;
+  --c-surface-2: 32 32 36;
+  --c-border: 39 39 42;
+  --c-fg: 244 244 245;
+  --c-muted: 161 161 170;
+  --c-faint: 113 113 122;
+  --c-accent: 244 244 245;
+  --c-accent-fg: 9 9 11;
+  --c-positive: 134 239 172;
+  --c-negative: 252 165 165;
+  --c-warning: 253 224 71;
 }
 
 html,
@@ -290,11 +290,6 @@ body {
      the Create button, the live word, glows and accent hovers. Buttons carry WHITE
      text on this fill (dark text would vanish on pure blue). */
   --c-volt: 0 0 255;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --c-volt: 0 0 255;
-  }
 }
 .text-volt {
   color: rgb(var(--c-volt));

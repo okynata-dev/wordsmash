@@ -6,6 +6,7 @@ import { PrivyProvider, type PrivyClientConfig } from "@privy-io/react-auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig, activeChain } from "./wagmi";
 import { PRIVY_APP_ID, PRIVY_ENABLED } from "./config";
+import { storedTheme } from "./theme";
 import { ToastProvider } from "./components/Toast";
 import { ConnectModalProvider } from "./components/ConnectModal";
 import { WalletPanelProvider } from "./components/WalletPanel";
@@ -18,10 +19,10 @@ const queryClient = new QueryClient({
   },
 });
 
-// Privy modal theming — dark, the brand volt-blue accent, the book logo.
+// Privy modal theming — matches the app theme at load, volt-blue accent, book logo.
 const privyConfig: PrivyClientConfig = {
   appearance: {
-    theme: "dark",
+    theme: storedTheme(),
     accentColor: "#0000FF",
     logo: "https://keepney.com/icon-192.png",
     walletChainType: "ethereum-only",

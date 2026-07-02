@@ -7,6 +7,7 @@ import { WelcomeModal } from "./WelcomeModal";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { activeChain } from "../wagmi";
 import { normAddr } from "../lib/format";
+import { storedTheme, applyTheme, type Theme } from "../theme";
 
 // ── icons (inline, 18px stroke; logo is a filled white book) ───────────────────
 type IconProps = { className?: string };
@@ -82,6 +83,42 @@ function MenuIcon({ className = "" }: IconProps) {
     <svg {...stroke} className={`${ICON} ${className}`}>
       <path d="M3 6h18M3 12h18M3 18h18" />
     </svg>
+  );
+}
+function SunIcon({ className = "" }: IconProps) {
+  return (
+    <svg {...stroke} className={`${ICON} ${className}`}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+function MoonIcon({ className = "" }: IconProps) {
+  return (
+    <svg {...stroke} className={`${ICON} ${className}`}>
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  );
+}
+
+/** Light/dark switch — light is the default; the choice persists per device. */
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(storedTheme);
+  function toggle() {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    applyTheme(next);
+  }
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={toggle}
+      className="flex w-fit items-center gap-2 text-xs text-faint transition hover:text-fg"
+      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+    >
+      {dark ? <SunIcon className="h-3.5 w-3.5" /> : <MoonIcon className="h-3.5 w-3.5" />}
+      {dark ? "Light mode" : "Dark mode"}
+    </button>
   );
 }
 
@@ -245,6 +282,7 @@ export function Layout() {
           <Link to="/legal" className="hover:text-fg">
             Terms &amp; risk
           </Link>
+          <ThemeToggle />
         </div>
       </aside>
 
@@ -307,6 +345,9 @@ export function Layout() {
                 >
                   Terms &amp; risk
                 </Link>
+                <div className="px-1 pt-1 pb-2">
+                  <ThemeToggle />
+                </div>
               </div>
             </div>
           )}

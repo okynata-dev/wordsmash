@@ -118,7 +118,7 @@ export function ComingSoon() {
             </form>
 
             <p className="fade-up mt-4 text-sm text-muted" style={{ animationDelay: "100ms" }}>
-              {word ? `Only one “${word}” will ever exist.` : "One word, one owner."}
+              {word ? `“${word}” — one word, one owner.` : "One word, one owner."}
             </p>
           </>
         ) : notified ? (
