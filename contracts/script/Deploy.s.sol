@@ -18,14 +18,16 @@ import {DeedMarketplace} from "../src/DeedMarketplace.sol";
 /// Env (see /.env.example):
 ///   DEPLOYER_PRIVATE_KEY      testnet key only
 ///   PROTOCOL_FEE_RECEIVER     optional; defaults to deployer  (HUMAN TASK: real receiver)
-///   CLAIM_FEE_WEI             optional; default 0.0003 ETH
+///   CLAIM_FEE_WEI             optional; default 0.001 ETH
 ///   MAX_CLAIMS_PER_ADDRESS    optional; default 3
 contract Deploy is Script {
     function run() external {
         uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(pk);
         address protocol = vm.envOr("PROTOCOL_FEE_RECEIVER", deployer);
-        uint256 claimFee = vm.envOr("CLAIM_FEE_WEI", uint256(0.0003 ether));
+        // Chosen product default (operator decision 2026-06): ~$1-2 anti-spam floor.
+        // The live testnet registry was also set to this via setClaimFee.
+        uint256 claimFee = vm.envOr("CLAIM_FEE_WEI", uint256(0.001 ether));
         uint256 maxClaims = vm.envOr("MAX_CLAIMS_PER_ADDRESS", uint256(3));
 
         bytes32 root = vm.parseJsonBytes32(vm.readFile("../shared/whitelist/proofs.json"), ".root");

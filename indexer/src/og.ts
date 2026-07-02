@@ -25,7 +25,7 @@ export function ogSvg(rawWord: string): string {
   <rect width="1200" height="630" fill="#000000"/>
   <rect x="20" y="20" width="1160" height="590" fill="none" stroke="#ffffff" stroke-width="2"/>
   <text x="600" y="320" fill="#ffffff" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="800" text-anchor="middle" letter-spacing="-2">${display}</text>
-  <text x="600" y="470" fill="#888888" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="30" letter-spacing="2" text-anchor="middle">only one will ever exist · wordsmash</text>
+  <text x="600" y="470" fill="#888888" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="30" letter-spacing="2" text-anchor="middle">only one will ever exist · keepney</text>
 </svg>`;
 }
 
@@ -38,8 +38,8 @@ export function shareHtml(rawWord: string, selfOrigin: string, webAppBase: strin
   const norm = normalizeWord(rawWord);
   const word = norm.ok ? norm.normalized : rawWord.toLowerCase().slice(0, 30);
   const ticker = toTicker(word);
-  const title = escapeXml(`$${ticker} · wordsmash`);
-  const desc = escapeXml(`${word} — only one will ever exist. Claim it on wordsmash.`);
+  const title = escapeXml(`$${ticker} · keepney`);
+  const desc = escapeXml(`${word} — only one will ever exist. Keep it on keepney.`);
   const ogImage = `${selfOrigin}/og/${encodeURIComponent(word)}`;
   const wordUrl = `${webAppBase.replace(/\/$/, "")}/word/${encodeURIComponent(word)}`;
   const safeWordUrl = escapeXml(wordUrl);
@@ -57,7 +57,7 @@ export function shareHtml(rawWord: string, selfOrigin: string, webAppBase: strin
 <meta property="og:description" content="${desc}"/>
 <meta property="og:image" content="${safeImg}"/>
 <meta property="og:url" content="${safeWordUrl}"/>
-<meta property="og:site_name" content="wordsmash"/>
+<meta property="og:site_name" content="keepney"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${title}"/>
 <meta name="twitter:description" content="${desc}"/>
@@ -66,7 +66,7 @@ export function shareHtml(rawWord: string, selfOrigin: string, webAppBase: strin
 <meta http-equiv="refresh" content="0; url=${safeWordUrl}"/>
 </head>
 <body>
-<p>Redirecting to <a href="${safeWordUrl}">$${escapeXml(ticker)} on wordsmash</a>…</p>
+<p>Redirecting to <a href="${safeWordUrl}">$${escapeXml(ticker)} on keepney</a>…</p>
 </body>
 </html>`;
 }

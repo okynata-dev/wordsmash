@@ -34,13 +34,16 @@ test("claim a word, list it, and buy it from a second account", async ({ page, r
   // --- Account 0 connects, enrolls (whitelist), claims a fresh word ---
   await injectWallet(page, ACCOUNTS.acc2);
   await page.goto("/");
-  await page.getByRole("button", { name: /connect wallet/i }).first().click();
-  await expect(page.getByRole("button", { name: /0x3c44/i })).toBeVisible({ timeout: 15_000 });
+  // Sign-in: header button opens the wallet dialog; pick the injected wallet.
+  await page.getByRole("button", { name: /sign in/i }).first().click();
+  await page.getByRole("button", { name: /browser wallet/i }).click();
+  // Connected state is an account pill — a profile LINK, not a button.
+  await expect(page.getByRole("link", { name: /0x3c44/i })).toBeVisible({ timeout: 15_000 });
 
   await page.getByPlaceholder(/type a word|bread/i).fill(WORD);
   await expect(page.getByText(/is available/i)).toBeVisible();
   await enrollIfNeeded(); // gate renders once a valid word is entered
-  await page.getByRole("button", { name: /^claim/i }).click();
+  await page.getByRole("button", { name: /^keep it/i }).click();
   await page.waitForTimeout(2000);
   await reindex();
 
@@ -66,9 +69,14 @@ test("claim a word, list it, and buy it from a second account", async ({ page, r
   // --- Account 1 buys it (re-inject as acc1; wagmi auto-reconnects to the new provider) ---
   await injectWallet(page, ACCOUNTS.acc3);
   await page.goto(`/word/${WORD}`);
-  const connect = page.getByRole("button", { name: /connect wallet/i }).first();
-  if (await connect.isVisible().catch(() => false)) await connect.click();
-  await expect(page.getByRole("button", { name: /0x90f7/i })).toBeVisible({ timeout: 15_000 });
+  // Sign-in: header button opens the wallet dialog; pick the injected wallet.
+  const connect = page.getByRole("button", { name: /sign in/i }).first();
+  if (await connect.isVisible().catch(() => false)) {
+    await connect.click();
+    await page.getByRole("button", { name: /browser wallet/i }).click();
+  }
+  // Connected state is an account pill — a profile LINK, not a button.
+  await expect(page.getByRole("link", { name: /0x90f7/i })).toBeVisible({ timeout: 15_000 });
   await enrollIfNeeded();
   // The DEED buy button is labelled "Buy · <price> ETH"; the token-market buy is just "Buy".
   await page.getByRole("button", { name: /buy.*eth/i }).first().click();

@@ -22,7 +22,7 @@ RPC_URL = "https://sepolia.base.org"            # TODO(operator): chain RPC URL
 REGISTRY = "0xe061E462Cd4610c727a10BD79E752293420ce314"     # local anvil default; TODO(operator) for testnet
 MARKETPLACE = "0x4Bd0792a1DA3F387E0d9AFA3d97Ca6d9fdA5ff82"  # local anvil default; TODO(operator) for testnet
 START_BLOCK = "43208348"                            # TODO(operator): deployment block
-WEB_APP_BASE = "https://wordsmash.pages.dev"  # web app base url for /share redirects
+WEB_APP_BASE = "https://keepney.com"  # web app base url for /share redirects
 # C1: bearer token guarding POST /admin/*. Set ONLY via secret (never committed):
 #   wrangler secret put ADMIN_TOKEN
 # When unset, /admin/* is refused (401) — the cron handles indexing, so admin is optional.

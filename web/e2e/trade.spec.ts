@@ -17,9 +17,14 @@ test("buy tokens on a word's bonding-curve market via the UI", async ({ page, re
 
   await injectWallet(page, ACCOUNTS.acc0);
   await page.goto("/word/genesis");
-  const connect = page.getByRole("button", { name: /connect wallet/i }).first();
-  if (await connect.isVisible().catch(() => false)) await connect.click();
-  await expect(page.getByRole("button", { name: /0xf39f/i })).toBeVisible({ timeout: 15_000 });
+  // Sign-in: header button opens the wallet dialog; pick the injected wallet.
+  const connect = page.getByRole("button", { name: /sign in/i }).first();
+  if (await connect.isVisible().catch(() => false)) {
+    await connect.click();
+    await page.getByRole("button", { name: /browser wallet/i }).click();
+  }
+  // Connected state is an account pill — a profile LINK, not a button.
+  await expect(page.getByRole("link", { name: /0xf39f/i })).toBeVisible({ timeout: 15_000 });
 
   // acc0 is already enrolled; if the gate shows, enroll.
   const enroll = page.getByRole("button", { name: /enroll|verify whitelist/i });

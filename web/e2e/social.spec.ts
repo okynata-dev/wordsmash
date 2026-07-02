@@ -9,9 +9,14 @@ test("post a comment via a signed message and see it appear", async ({ page }) =
 
   await injectWallet(page, ACCOUNTS.acc0);
   await page.goto("/word/genesis");
-  const connect = page.getByRole("button", { name: /connect wallet/i }).first();
-  if (await connect.isVisible().catch(() => false)) await connect.click();
-  await expect(page.getByRole("button", { name: /0xf39f/i })).toBeVisible({ timeout: 15_000 });
+  // Sign-in: header button opens the wallet dialog; pick the injected wallet.
+  const connect = page.getByRole("button", { name: /sign in/i }).first();
+  if (await connect.isVisible().catch(() => false)) {
+    await connect.click();
+    await page.getByRole("button", { name: /browser wallet/i }).click();
+  }
+  // Connected state is an account pill — a profile LINK, not a button.
+  await expect(page.getByRole("link", { name: /0xf39f/i })).toBeVisible({ timeout: 15_000 });
 
   // The comment composer is gated on connected + whitelisted; enroll if the gate appears.
   const enroll = page.getByRole("button", { name: /enroll|verify whitelist/i });
