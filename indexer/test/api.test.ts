@@ -7,7 +7,7 @@ import {
   handleSale,
   handleTrade,
 } from "../src/handlers.js";
-import { getCheck, getStats, getWordDetail, getMarket, getWordCandles } from "../src/api.js";
+import { getCheck, getStats, getWordDetail, getMarket, getWordCandles, getWordHolders, getProfilePositions } from "../src/api.js";
 import { getProfile } from "../src/social.js";
 import type { Db } from "../src/db.js";
 
@@ -149,5 +149,28 @@ describe("GET /word/:word/candles", () => {
     const bogus = await getWordCandles(db, "coffee", "123");
     expect(bogus.length).toBe(2);
     expect(await getWordCandles(db, "ghost", "300")).toEqual([]);
+  });
+});
+
+describe("holders + positions", () => {
+  const MKT2 = "0x00000000000000000000000000000000000000bb";
+
+  it("nets buys minus sells per trader, drops non-positive, sorts desc", async () => {
+    const db = await freshDb();
+    await handleTransfer(db, { from: A.zero, to: A.alice, tokenId: 11n }, { tx: "0xb0", logIndex: 0, ts: 10 });
+    await handleWordClaimed(db, { word: "tea", tokenId: 11n, owner: A.alice, market: MKT2 }, { tx: "0xb0", logIndex: 1, ts: 10 });
+    await handleTrade(db, { market: MKT2, trader: A.alice, isBuy: true, ethWei: 1n, tokenAmount: 100n, priceWei: 1n }, { tx: "0xb1", logIndex: 0, ts: 20 });
+    await handleTrade(db, { market: MKT2, trader: A.bob, isBuy: true, ethWei: 1n, tokenAmount: 300n, priceWei: 1n }, { tx: "0xb2", logIndex: 0, ts: 30 });
+    await handleTrade(db, { market: MKT2, trader: A.alice, isBuy: false, ethWei: 1n, tokenAmount: 100n, priceWei: 1n }, { tx: "0xb3", logIndex: 0, ts: 40 });
+
+    const holders = await getWordHolders(db, "TEA");
+    expect(holders.length).toBe(1); // alice netted to zero and is dropped
+    expect(holders[0].address.toLowerCase()).toBe(A.bob.toLowerCase());
+    expect(holders[0].netTokens).toBe("300");
+
+    const positions = await getProfilePositions(db, A.alice.toLowerCase());
+    expect(positions.length).toBe(1); // candidate market even though net is zero (client verifies)
+    expect(positions[0].word).toBe("tea");
+    expect(positions[0].market).toBe(MKT2);
   });
 });

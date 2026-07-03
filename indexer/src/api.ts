@@ -13,6 +13,8 @@ import type {
   TradeRow,
   PricePoint,
   Candle,
+  HolderRow,
+  PositionRow,
   Stats,
   CheckResult,
   Paginated,
@@ -510,6 +512,72 @@ export async function getWordCandles(
     });
   }
   return candles;
+}
+
+// GET /word/:word/holders -> top curve holders by NET indexed trades (buys - sells).
+// Candidates only: plain ERC-20 transfers aren't indexed, so the client re-reads
+// balanceOf on-chain for every row before showing numbers.
+const HOLDERS_CAP = 20;
+export async function getWordHolders(db: Db, rawWord: string): Promise<HolderRow[]> {
+  const norm = normalizeWord(rawWord);
+  const word = norm.ok ? norm.normalized : rawWord.toLowerCase();
+  const wordRow = await db
+    .prepare("SELECT token_id FROM words WHERE word = ?")
+    .bind(word)
+    .first<{ token_id: string }>();
+  if (!wordRow) return [];
+
+  const { results } = await db
+    .prepare(
+      `SELECT trader, is_buy, token_amount FROM trades WHERE token_id = ?
+       ORDER BY ts DESC, id DESC LIMIT 5000`,
+    )
+    .bind(wordRow.token_id)
+    .all<{ trader: string; is_buy: number; token_amount: string }>();
+
+  const net = new Map<string, bigint>();
+  for (const r of results) {
+    let amt: bigint;
+    try {
+      amt = BigInt(r.token_amount ?? "0");
+    } catch {
+      amt = 0n;
+    }
+    const key = (r.trader ?? "").toLowerCase();
+    net.set(key, (net.get(key) ?? 0n) + (r.is_buy ? amt : -amt));
+  }
+  return [...net.entries()]
+    .filter(([, v]) => v > 0n)
+    .sort((a, b) => (a[1] > b[1] ? -1 : a[1] < b[1] ? 1 : 0))
+    .slice(0, HOLDERS_CAP)
+    .map(([address, v]) => ({ address: checksum(address), netTokens: v.toString() }));
+}
+
+// GET /profile/:address/positions -> every market this address has traded on
+// (candidates for the Positions tab; the client reads live balances on-chain).
+const POSITIONS_CAP = 50;
+export async function getProfilePositions(db: Db, addressLower: string): Promise<PositionRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT t.market AS market, t.word AS word,
+              m.token_symbol AS token_symbol, m.last_price_wei AS last_price_wei
+       FROM trades t LEFT JOIN markets m ON m.market = t.market
+       WHERE t.trader = ?
+       ORDER BY t.market LIMIT ?`,
+    )
+    .bind(addressLower, POSITIONS_CAP)
+    .all<{
+      market: string;
+      word: string | null;
+      token_symbol: string | null;
+      last_price_wei: string | null;
+    }>();
+  return results.map((r) => ({
+    word: r.word ?? "",
+    market: r.market,
+    tokenSymbol: r.token_symbol ?? null,
+    lastPriceWei: r.last_price_wei ?? "0",
+  }));
 }
 
 // GET /profile/:address lives in social.ts (it now joins the off-chain profiles row).

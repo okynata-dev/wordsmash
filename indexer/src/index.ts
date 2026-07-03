@@ -8,6 +8,8 @@ import {
   getWordTrades,
   getWordChart,
   getWordCandles,
+  getWordHolders,
+  getProfilePositions,
   getCheck,
   getStats,
   getMarket,
@@ -236,6 +238,14 @@ export default {
         });
       }
 
+      // /word/:word/holders  (top curve holders — candidates, verified on-chain by the client)
+      if (parts[0] === "word" && parts[1] != null && parts[2] === "holders") {
+        const word = decodeURIComponent(parts[1]);
+        return json(await getWordHolders(db, word), {
+          headers: { "Cache-Control": "public, max-age=10" },
+        });
+      }
+
       if (parts[0] === "word" && parts[1] != null) {
         // Live market reads (marketCap/deedFees/supply) via RPC; price/volume from D1.
         const reader = env.RPC_URL ? chainMarketReader(env.RPC_URL) : undefined;
@@ -276,6 +286,14 @@ export default {
             "Cache-Control": "public, max-age=3600",
             ...CORS_HEADERS,
           },
+        });
+      }
+
+      // /profile/:address/positions  (markets ever traded — client verifies balances on-chain)
+      if (parts[0] === "profile" && parts[1] != null && parts[2] === "positions") {
+        const address = requireAddress(decodeURIComponent(parts[1]));
+        return json(await getProfilePositions(db, address), {
+          headers: { "Cache-Control": "public, max-age=10" },
         });
       }
 

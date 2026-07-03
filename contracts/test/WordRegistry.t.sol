@@ -240,3 +240,113 @@ contract WordRegistryTest is Base {
         registry.withdrawFees();
     }
 }
+
+// ── commit-reveal claims (anti mempool-sniping) ─────────────────────────────────
+contract CommitRevealTest is Base {
+    function setUp() public {
+        _deploy();
+        registry.setWhitelistEnabled(false); // open claims — the mode commit-reveal is for
+        registry.setCommitReveal(true, 30);
+        vm.deal(alice, 1 ether);
+        vm.deal(eve, 1 ether);
+    }
+
+    function _commitment(string memory word, address who, bytes32 salt) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(word, who, salt));
+    }
+
+    function test_PlaintextClaimClosedWhenEnabled() public {
+        vm.prank(alice);
+        vm.expectRevert(bytes("USE_COMMIT_REVEAL"));
+        registry.claim{value: 0.001 ether}("bread");
+    }
+
+    function test_CommitRevealHappyPath() public {
+        bytes32 salt = bytes32(uint256(42));
+        vm.prank(alice);
+        registry.commitClaim(_commitment("bread", alice, salt));
+        vm.warp(block.timestamp + 31);
+        vm.prank(alice);
+        (uint256 tokenId,) = registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+        assertEq(registry.ownerOf(tokenId), alice);
+    }
+
+    function test_RevealTooEarlyReverts() public {
+        bytes32 salt = bytes32(uint256(1));
+        vm.prank(alice);
+        registry.commitClaim(_commitment("bread", alice, salt));
+        vm.warp(block.timestamp + 10); // < 30s
+        vm.prank(alice);
+        vm.expectRevert(bytes("COMMIT_TOO_NEW"));
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+    }
+
+    function test_ExpiredCommitReverts() public {
+        bytes32 salt = bytes32(uint256(2));
+        vm.prank(alice);
+        registry.commitClaim(_commitment("bread", alice, salt));
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(alice);
+        vm.expectRevert(bytes("COMMIT_EXPIRED"));
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+    }
+
+    /// The attack this exists to stop: a bot copies the victim's reveal from the mempool
+    /// and tries to claim first. Without an AGED commitment bound to ITS OWN address it
+    /// cannot win — and it can't have made one before the word became public.
+    function test_MempoolSniperCannotFrontRunReveal() public {
+        bytes32 salt = bytes32(uint256(7));
+        vm.prank(alice);
+        registry.commitClaim(_commitment("bread", alice, salt));
+        vm.warp(block.timestamp + 31);
+
+        // eve sees alice's reveal (word + salt now public) and races it:
+        vm.prank(eve);
+        vm.expectRevert(bytes("NO_COMMIT")); // salt+word hash to ALICE's commitment, not eve's
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+        // eve commits NOW with her own salt — but a fresh commitment can't reveal yet
+        vm.prank(eve);
+        registry.commitClaim(_commitment("bread", eve, bytes32(uint256(8))));
+        vm.prank(eve);
+        vm.expectRevert(bytes("COMMIT_TOO_NEW"));
+        registry.claimWithCommit{value: 0.001 ether}("bread", bytes32(uint256(8)));
+        // ...so alice lands first
+        vm.prank(alice);
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+        assertEq(registry.wordOf(uint256(keccak256(bytes("bread")))), "bread");
+    }
+
+    function test_CommitmentConsumedOnce() public {
+        bytes32 salt = bytes32(uint256(9));
+        vm.prank(alice);
+        registry.commitClaim(_commitment("bread", alice, salt));
+        vm.warp(block.timestamp + 31);
+        vm.prank(alice);
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+        // same commitment can't be replayed (word is claimed anyway, but the commit is gone first)
+        vm.prank(alice);
+        vm.expectRevert(bytes("NO_COMMIT"));
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+    }
+
+    function test_SafePathWorksEvenWhenFlagOff() public {
+        registry.setCommitReveal(false, 30);
+        bytes32 salt = bytes32(uint256(11));
+        vm.prank(alice);
+        registry.commitClaim(_commitment("bread", alice, salt));
+        vm.warp(block.timestamp + 31);
+        vm.prank(alice);
+        registry.claimWithCommit{value: 0.001 ether}("bread", salt);
+        assertEq(registry.totalWords(), 1);
+        // and plaintext works too when off
+        vm.prank(alice);
+        registry.claim{value: 0.001 ether}("milk");
+    }
+
+    function test_DelayBoundsEnforced() public {
+        vm.expectRevert(bytes("BAD_DELAY"));
+        registry.setCommitReveal(true, 5);
+        vm.expectRevert(bytes("BAD_DELAY"));
+        registry.setCommitReveal(true, 11 minutes);
+    }
+}

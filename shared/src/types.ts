@@ -77,6 +77,22 @@ export interface PricePoint {
   priceWei: string;
 }
 
+/** A trader's net curve position candidate (from indexed trades; the client
+    verifies real balances on-chain before display). */
+export interface HolderRow {
+  address: string; // checksummed
+  netTokens: string; // net token_amount from trades (buys - sells), wei string
+}
+
+/** A market an address has ever traded on — candidate row for the Positions tab
+    (the client reads live balanceOf on-chain; this only nominates markets). */
+export interface PositionRow {
+  word: string;
+  market: string;
+  tokenSymbol: string | null;
+  lastPriceWei: string;
+}
+
 /** OHLC candle for the trading chart. Prices are wei strings; `t` is the bucket
     start (unix seconds); `v` is the ETH volume (wei) traded in the bucket. */
 export interface Candle {

@@ -19,9 +19,9 @@ database_id = "c9b867c1-8581-4573-a629-1adc2a852f5d"
 # Defaults below are the LOCAL anvil deployment (deterministic addresses from a fresh
 # `make deploy`). TODO(operator): override REGISTRY/MARKETPLACE/RPC_URL/START_BLOCK for Base Sepolia.
 RPC_URL = "https://sepolia.base.org"            # TODO(operator): chain RPC URL
-REGISTRY = "0x7739AEEDaE03118c53CD34e3C084c6cbBf847b87"     # Base Sepolia (mainnet-ready contracts, 2026-07-03)
-MARKETPLACE = "0xBC48b7Ddf8837179974A776785b045452C5187B0"  # Base Sepolia (mainnet-ready contracts, 2026-07-03)
-START_BLOCK = "43636534"                            # TODO(operator): deployment block
+REGISTRY = "0x7d0F6537Acf63308aE2b2E321e4710bBbc5C63E0"     # Base Sepolia (mainnet-ready contracts, 2026-07-03)
+MARKETPLACE = "0x26864813640565Cd62fEE0CF1d9707D8424A77CF"  # Base Sepolia (mainnet-ready contracts, 2026-07-03)
+START_BLOCK = "43638260"                            # TODO(operator): deployment block
 WEB_APP_BASE = "https://keepney.com"  # web app base url for /share redirects
 # C1: bearer token guarding POST /admin/*. Set ONLY via secret (never committed):
 #   wrangler secret put ADMIN_TOKEN

@@ -22,12 +22,14 @@ import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
 import { friendlyError, ethLabel, timeAgo } from "../lib/format";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
+import { keccak256, encodePacked } from "viem";
 import {
   useClaimFee,
   useRemainingClaims,
   useWrongNetwork,
   useWhitelistEnabled,
   useIsAllowed,
+  useCommitReveal,
 } from "../hooks/useRegistry";
 
 type State =
@@ -116,6 +118,91 @@ export function Home() {
   const { isLoading: confirming, isSuccess } = claimReceipt;
   useReceiptError(claimReceipt, "The claim");
 
+  // ── snipe-proof claims (commit → wait → reveal), active when the contract flag is on ──
+  const { enabled: crEnabled, minDelaySec } = useCommitReveal();
+  const commitWrite = useWriteContract();
+  const commitReceipt = useWaitForTransactionReceipt({ hash: commitWrite.data });
+  useReceiptError(commitReceipt, "The claim reservation");
+  const saltRef = useRef<`0x${string}` | null>(null);
+  const [revealAt, setRevealAt] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  function startCommit(word: string) {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const salt = ("0x" +
+      Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")) as `0x${string}`;
+    saltRef.current = salt;
+    claimingWordRef.current = word;
+    // commitment binds (word, OUR address, salt) — copying it does a sniper no good
+    const commitment = keccak256(
+      encodePacked(["string", "address", "bytes32"], [word, address as `0x${string}`, salt]),
+    );
+    commitWrite.writeContract(
+      {
+        address: registryAddress,
+        abi: wordRegistryAbi,
+        functionName: "commitClaim",
+        args: [commitment],
+        chainId: activeChain.id,
+      },
+      {
+        onError: (e) => {
+          claimingWordRef.current = null;
+          saltRef.current = null;
+          toast.error(friendlyError(e));
+        },
+        onSuccess: () => toast.info("Reserving your claim…"),
+      },
+    );
+  }
+
+  // Commit confirmed -> arm the countdown (small buffer over the on-chain min delay).
+  useEffect(() => {
+    if (commitReceipt.isSuccess) setRevealAt(Date.now() + (minDelaySec + 2) * 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitReceipt.isSuccess]);
+
+  // Tick down, then auto-send the reveal — one tap for the user, two txs under the hood.
+  useEffect(() => {
+    if (revealAt === null) return;
+    const t = window.setInterval(() => {
+      const left = Math.max(0, Math.ceil((revealAt - Date.now()) / 1000));
+      setCountdown(left);
+      if (left > 0) return;
+      window.clearInterval(t);
+      setRevealAt(null);
+      const w = claimingWordRef.current;
+      const salt = saltRef.current;
+      if (!w || !salt) return;
+      writeContract(
+        {
+          address: registryAddress,
+          abi: wordRegistryAbi,
+          functionName: "claimWithCommit",
+          args: [w, salt],
+          value: (claimFee as bigint | undefined) ?? 0n,
+          chainId: activeChain.id,
+        },
+        {
+          onError: (e) => {
+            claimingWordRef.current = null;
+            saltRef.current = null;
+            toast.error(friendlyError(e));
+          },
+          onSuccess: () => toast.info("Claiming… confirm in your wallet"),
+        },
+      );
+    }, 250);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealAt]);
+
+  const committing =
+    commitWrite.isPending || commitReceipt.isLoading || revealAt !== null;
+
   // The exact word being claimed, captured at click time so navigation never depends
   // on the live input state (which re-checks and can change out from under us).
   const claimingWordRef = useRef<string | null>(null);
@@ -159,6 +246,10 @@ export function Home() {
       return;
     }
     fireSmash(); // instant tactile feedback on intent, before the wallet round-trip
+    if (crEnabled) {
+      startCommit(state.normalized); // snipe-proof path: commit now, reveal after the delay
+      return;
+    }
     claimingWordRef.current = state.normalized; // remember what we're claiming for post-tx nav
     writeContract(
       {
@@ -189,11 +280,17 @@ export function Home() {
           isPending ||
           confirming ||
           syncing ||
+          committing ||
           outOfClaims ||
           claimFee === undefined /* M3/M4: never enable a claim before the fee is known */
         }
       >
-        {isPending || confirming || syncing ? (
+        {committing ? (
+          <>
+            <Spinner />{" "}
+            {revealAt !== null ? `Securing your claim… ${countdown}s` : "Reserving…"}
+          </>
+        ) : isPending || confirming || syncing ? (
           <>
             <Spinner /> {syncing ? "Syncing…" : "Keeping…"}
           </>
@@ -256,7 +353,8 @@ export function Home() {
                   claimFee !== undefined &&
                   !isPending &&
                   !confirming &&
-                  !syncing
+                  !syncing &&
+                  !committing
                 ) {
                   doClaim();
                 }

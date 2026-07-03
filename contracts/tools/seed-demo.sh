@@ -79,7 +79,7 @@ fi
 # --- actor wallets (5 actors, <=3 claims each) ---
 # word lists chosen to look like a real, desirable launchpad. NB: 'bitcoin' is reserved.
 ACTOR_WORDS=(
-  "base onchain gm"
+  "keep onchain gm"
   "degen wagmi based"
   "alpha frens mint"
   "ser lfg moon"

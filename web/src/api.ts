@@ -18,6 +18,8 @@ import type {
   TradeRow,
   PricePoint,
   Candle,
+  HolderRow,
+  PositionRow,
 } from "@shared/types";
 import type { Comment } from "@shared/social";
 import {
@@ -133,6 +135,13 @@ export const api = {
   /** GET /word/:word/candles?res= -> OHLC candles for the trading chart. */
   candles: (word: string, res: number) =>
     getList<Candle>(`/word/${encodeURIComponent(word)}/candles?res=${res}`),
+
+  /** GET /word/:word/holders -> top curve holders (candidates; verify on-chain). */
+  holders: (word: string) => getList<HolderRow>(`/word/${encodeURIComponent(word)}/holders`),
+
+  /** GET /profile/:address/positions -> markets ever traded (candidates for balances). */
+  positions: (address: string) =>
+    getList<PositionRow>(`/profile/${normAddr(address)}/positions`),
 
   /** GET /profile/:address -> meta + owned words, listings, activity, stats. */
   profile: async (address: string): Promise<Profile> => {

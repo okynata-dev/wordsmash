@@ -37,6 +37,19 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     ///         working, so a pause can never trap user funds.
     bool public paused;
 
+    // --- commit-reveal claims (anti mempool-sniping) ---
+    /// @notice When enabled, plaintext claim() is closed and words are claimed in two
+    ///         steps: commitClaim(keccak256(word ‖ sender ‖ salt)) → wait commitMinDelay →
+    ///         claimWithCommit(word, salt). A bot that copies the reveal from the mempool
+    ///         cannot front-run it: winning requires an OLDER commitment for the same
+    ///         (word, THEIR address, salt) — which they couldn't have made without knowing
+    ///         the word before the victim revealed it. Off during the closed beta (the
+    ///         whitelist already bounds snipers); flip on for the open/public launch.
+    bool public commitRevealEnabled;
+    uint256 public commitMinDelay = 30 seconds;
+    uint256 public constant COMMIT_MAX_AGE = 1 days;
+    mapping(bytes32 => uint256) public commitTimestamps; // commitment hash => timestamp
+
     // --- anti-bot claim limit ---
     uint256 public maxClaimsPerAddress; // 0 = unlimited
     mapping(address => uint256) public claimsBy; // monotonic mint count, cannot be reset by transfer
@@ -64,6 +77,8 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     event ProtocolFeeReceiverUpdated(address receiver);
     event FeesWithdrawn(address indexed to, uint256 amount);
     event PausedUpdated(bool paused);
+    event CommitRevealUpdated(bool enabled, uint256 minDelay);
+    event ClaimCommitted(bytes32 indexed commitment);
 
     constructor(
         address protocolFeeReceiver_,
@@ -112,15 +127,54 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     // ----------------------------------------------------------------------------
 
     /// @notice Claim a unique word: mints its deed AND deploys its bonding-curve token market.
-    /// @dev Accepts plaintext claims, which are front-runnable (a bot can copy the word from a
-    ///      pending tx and claim it first). The closed-beta whitelist limits who can do this; a
-    ///      commit-reveal scheme is the planned mitigation for the public launch.
+    /// @dev Plaintext path — front-runnable by mempool bots, so it is only open while
+    ///      commitRevealEnabled is off (closed beta, where the whitelist bounds snipers).
+    ///      The public-launch path is commitClaim() → claimWithCommit().
     function claim(string calldata rawWord)
         external
         payable
         nonReentrant
         returns (uint256 tokenId, address market)
     {
+        // Plaintext claims close when commit-reveal is on — otherwise the two-step
+        // protection would be trivially bypassed by calling this instead.
+        require(!commitRevealEnabled, "USE_COMMIT_REVEAL");
+        return _claim(rawWord);
+    }
+
+    /// @notice Step 1 of a snipe-proof claim: commit the hash of what you'll claim.
+    ///         commitment = keccak256(abi.encodePacked(normalizedWord, msg.sender, salt)).
+    ///         Binding msg.sender inside the hash makes commitments non-transferable —
+    ///         copying someone's commitment does a bot no good.
+    function commitClaim(bytes32 commitment) external {
+        require(!paused, "PAUSED");
+        commitTimestamps[commitment] = block.timestamp;
+        emit ClaimCommitted(commitment);
+    }
+
+    /// @notice Step 2: reveal and claim. Works whether or not commit-reveal is enforced
+    ///         (so clients can always use the safe path). The commitment must be older
+    ///         than commitMinDelay — a mempool sniper who first learns the word from THIS
+    ///         tx cannot have an aged commitment for their own address — and younger than
+    ///         COMMIT_MAX_AGE (stale commitments can't be hoarded forever).
+    function claimWithCommit(string calldata rawWord, bytes32 salt)
+        external
+        payable
+        nonReentrant
+        returns (uint256 tokenId, address market)
+    {
+        (string memory word, bool valid) = rawWord.normalize();
+        require(valid, "INVALID_WORD");
+        bytes32 commitment = keccak256(abi.encodePacked(word, msg.sender, salt));
+        uint256 committedAt = commitTimestamps[commitment];
+        require(committedAt != 0, "NO_COMMIT");
+        require(block.timestamp >= committedAt + commitMinDelay, "COMMIT_TOO_NEW");
+        require(block.timestamp <= committedAt + COMMIT_MAX_AGE, "COMMIT_EXPIRED");
+        delete commitTimestamps[commitment]; // consume exactly once
+        return _claim(rawWord);
+    }
+
+    function _claim(string calldata rawWord) private returns (uint256 tokenId, address market) {
         require(!paused, "PAUSED");
         require(isAllowed(msg.sender), "NOT_WHITELISTED");
 
@@ -290,6 +344,15 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     function setPaused(bool paused_) external onlyOwner {
         paused = paused_;
         emit PausedUpdated(paused_);
+    }
+
+    /// @notice Toggle snipe-proof claims and tune the commit age window (bounded so the
+    ///         owner can neither disable the delay nor lock claims behind an absurd one).
+    function setCommitReveal(bool enabled, uint256 minDelay) external onlyOwner {
+        require(minDelay >= 10 seconds && minDelay <= 10 minutes, "BAD_DELAY");
+        commitRevealEnabled = enabled;
+        commitMinDelay = minDelay;
+        emit CommitRevealUpdated(enabled, minDelay);
     }
 
     /// @notice Update the curve config used for FUTURE claims (existing markets keep their own).

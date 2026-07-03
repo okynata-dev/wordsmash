@@ -4,6 +4,7 @@ import { useAccount } from "wagmi";
 import { useProfile } from "../hooks/useProfile";
 import { WordTile } from "../components/WordTile";
 import { EarningsCard } from "../components/EarningsCard";
+import { Positions } from "../components/Positions";
 import { ShareButton } from "../components/ShareButton";
 import { Avatar } from "../components/Avatar";
 import { EditProfile } from "../components/EditProfile";
@@ -22,7 +23,7 @@ const activityVerb: Record<ActivityRow["type"], string> = {
   sell: "sold tokens of",
 };
 
-type Tab = "owned" | "listings" | "activity";
+type Tab = "owned" | "positions" | "listings" | "activity";
 
 export function Profile() {
   const { address = "" } = useParams();
@@ -136,6 +137,9 @@ export function Profile() {
             <TabButton active={tab === "owned"} onClick={() => setTab("owned")}>
               Owned <span className="text-faint">· {data.owned.length}</span>
             </TabButton>
+            <TabButton active={tab === "positions"} onClick={() => setTab("positions")}>
+              Positions
+            </TabButton>
             <TabButton active={tab === "listings"} onClick={() => setTab("listings")}>
               Listings <span className="text-faint">· {data.listings.length}</span>
             </TabButton>
@@ -159,6 +163,8 @@ export function Profile() {
                 ))}
               </Grid>
             ))}
+
+          {tab === "positions" && <Positions address={address} />}
 
           {tab === "listings" &&
             (data.listings.length === 0 ? (

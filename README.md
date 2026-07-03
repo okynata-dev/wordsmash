@@ -1,140 +1,99 @@
-# wordsmash — v1
+# keepney
 
-A launchpad where the asset is a **word**. Claiming a word mints a unique NFT (a **deed**). A given
-word, in canonical form, can be claimed **only once, ever** — global uniqueness enforced on-chain.
-No images, no descriptions — just the word. Owners resell deeds on a built-in marketplace, and every
-address has a profile of the words it owns and its activity.
+**Every word can be owned exactly once — and it pays its owner on every trade.**
 
-> ⚠️ **Experimental testnet software (Base Sepolia). Not an investment product.** No returns are
-> promised or implied. Testnet only — no mainnet config, no real-fund paths.
+Keeping a word (one tap, 0.001 ETH) mints its **deed** — a unique on-chain title,
+`tokenId = keccak256(word)` — and in the same transaction deploys the word's own ERC-20
+trading on a bonding curve. From that moment, **0.4% of every buy and sell flows to
+whoever holds the deed**. The deed is not a JPEG; it's a cash-flowing claim on a piece of
+the namespace, and it can itself be resold on the built-in marketplace.
 
-**Scope:** claim + ownership + deed marketplace + closed-beta whitelist + anti-bot limit + share/OG
-flywheel; a full **social layer** (rich profiles with avatar/bio/X/username/website, per-word
-comments, search, live activity feed, watchlists); and a **per-word bonding-curve token market** —
-claiming a word deploys its ERC-20, people buy/sell on the curve (pump.fun style), and trading fees
-flow to the deed holder. The word/deed itself stays imageless; only *users* get avatars.
-
-See **[DESIGN.md](DESIGN.md)** for how the system is designed against known launchpad failure modes
-(the pump.fun admin-drain exploit, sniping/MEV, rug pulls, graduation). **Still testnet-only and not
-professionally audited — not for real funds.**
-
-## Monorepo
+Live on **Base Sepolia**: [keepney.com](https://keepney.com)
 
 ```
-shared/     Canonical normalization (TS) + shared types + generated ABIs + whitelist proofs
-contracts/  Foundry: WordRegistry (registry + deed ERC-721), DeedMarketplace, tests, deploy + Merkle tools
-indexer/    Cloudflare Worker: event indexer -> D1, REST API, OG images + share pages
-web/        React + Vite + TS + wagmi/viem + Tailwind frontend
-.env.example, Makefile, .github/workflows/ci.yml
+type a word ──▶ deed (ERC-721) + token market (ERC-20 on a curve), one tx
+   trade    ──▶ 1% fee: 0.4% deed holder · 0.5% protocol · 0.1% deepens the curve
+ graduate   ──▶ 10 ETH in the curve freezes buys; selling stays open forever
 ```
 
-## How it fits together
+## Why you can't steal anyone's money here
+
+These are structural properties of the contracts, not policies — each enforced by code
+and pinned by tests (91 in `contracts/test/`, incl. fuzzing and stateful invariants):
+
+| Guarantee | How |
+|---|---|
+| **Exits are permissionless** | `sell()`, `claimFees()`, `withdraw()` carry no whitelist, no pause, no owner hook. Nothing — including the admin — can trap a holder's funds. `test_SellIsPermissionless` |
+| **No admin path to curve ETH** | `WordMarket` has no owner and no withdraw; reserve ETH only leaves via `sell()`. `test_OwnerCannotTouchCurveFunds` |
+| **The curve is always solvent** | Reserve-out math rounds in the contract's favor; `balance ≥ reserve + every fee pot` holds across randomized trade orderings. `invariant_marketAlwaysSolvent` |
+| **Earnings survive a deed sale** | Fees accrue per-owner at trade time (`deedFeesOf`); selling the deed moves only future cash flow. `test_UnclaimedFeesSurviveDeedSale` |
+| **Buyers pay the price they saw** | Marketplace `buy(tokenId, expectedPrice)` reverts on a mid-flight reprice; the app also re-reads the live listing at click time. `test_RepriceInFlightRevertsBuy` |
+| **Stale listings can't resurrect** | Per-token approvals only — ERC-721 clears them on every transfer, so an old listing dies with the deed's movement. `test_StaleListingUnexecutableAndReapable` |
+| **Claims can't be mempool-sniped** | Commit-reveal (`commitClaim` → delay → `claimWithCommit`), flag-gated for the open launch. `test_MempoolSniperCannotFrontRunReveal` |
+| **A pause can't take hostages** | The emergency switch stops entries (claims, buys, listings) only; every exit stays live. `test_PauseFreezesEntriesNotExits` |
+| **Pull-payments everywhere** | Marketplace `buy()` moves no ETH out; proceeds/refunds/fees are credited and withdrawn separately — a reverting recipient can never block trading (the pump.fun lesson). |
+
+The frontend applies the same paranoia: it **does not trust its own API** — market
+addresses from the indexer are verified against the on-chain registry before any
+value-bearing UI renders, deed buys re-read the live listing at click time, and every
+write is chain-pinned. Incident-mapped design notes: [SECURITY.md](SECURITY.md). Launch
+runbook + the human gate (external audit, multisig): [MAINNET.md](MAINNET.md).
+
+## Onboarding without the word "wallet"
+
+Sign in with email/Google/X (Privy) → an embedded wallet is created silently → claim,
+trade, earn — under a minute. External wallets work too. Profiles, avatars, comments and
+watchlists live off-chain behind SIWE-lite signatures (content-bound, replay-protected,
+rate-limited); shared message builders keep client and server byte-identical.
+
+## Architecture
 
 ```
-on-chain events ──▶ indexer (D1) ──▶ REST API ──▶ web app (reads)
-        ▲                                              │
-        └──────────────  wagmi writes  ◀───────────────┘
+on-chain events ──▶ indexer (CF Worker → D1) ──▶ REST API ──▶ web app (reads)
+        ▲                                                          │
+        └──────────────────  wagmi writes (chain-pinned)  ◀────────┘
 ```
 
-- **Uniqueness.** `WordRegistry` is itself the deed ERC-721. `tokenId = uint256(keccak256(word))`,
-  so the same normalized word maps to one tokenId, claimable once ever. (Folding the registry and
-  deed into one contract is a deliberate prototype simplification — fewer moving parts, same
-  behavior, and the transfer-gate lives right in the ERC-721 hook.)
-- **Normalization** (`shared/src/normalize.ts` ⇄ `contracts/.../WordNormalizer.sol`): trim, lowercase
-  `A–Z`, allow only `[a-z0-9]`, length 1–30; reject everything else (incl. all non-ASCII, which
-  sidesteps Unicode homoglyphs). The two implementations are proven byte-identical against the same
-  fixture (`shared/fixtures/normalization-vectors.json`) by both test suites.
-- **Closed-beta whitelist.** One shared Merkle-gated allowlist governs claim, list, buy, and deed
-  transfers. Addresses enroll once (`verifyWhitelist(proof)`), which caches a bool so cheap repeated
-  checks — and transfer gating, which can't carry a proof — work. `whitelistEnabled` flips the whole
-  gate off in one tx for public launch (no redeploy).
-- **Anti-bot.** A per-address monotonic claim counter (`maxClaimsPerAddress`, default 3) that can't
-  be bypassed by transferring deeds away; the owner can lift it later. Roadmap: a fairer mechanism
-  (queue / Harberger) — see `TODO(operator)` markers.
-- **Marketplace.** Fixed-price, flat 10% protocol fee, fully **pull-payment** (buy() moves no ETH out;
-  seller proceeds, buyer refunds, and protocol fees are all withdrawn separately) — so no
-  external-call reentrancy can touch funds.
-- **Flywheel.** Share buttons compose a post ("I claimed the word `X` — only one will ever exist") +
-  a link to the indexer's server-rendered `/share/:word` page, which carries OpenGraph/Twitter meta
-  pointing at `/og/:word` (a clean monochrome image) so shares unfurl richly.
-- **Social layer.** User profiles (avatar, bio, X/Twitter, username, website), per-word comments,
-  search, a live activity feed, and watchlists. All off-chain in D1, behind **SIWE-lite auth**: the
-  client signs a message (built from the canonical builders in `shared/src/social.ts`), the indexer
-  recovers the signer and verifies it owns the address — no passwords, no sessions. Avatars upload to
-  R2 (with a deterministic gradient fallback). X handles are self-attested; OAuth verification is a
-  HUMAN TASK. The same shared message builders are used on both sides, so signing and verification
-  can never drift.
+- **Uniqueness**: the registry IS the deed ERC-721; one normalized word → one tokenId, once ever.
+- **Normalization**: TS ⇄ Solidity implementations proven byte-identical against a shared
+  fixture (`shared/fixtures/normalization-vectors.json`) — non-ASCII rejected (no homoglyphs).
+- **Markets**: EIP-1167 clones, virtual-reserve constant-product curve, quotes are
+  execution-exact (fee-inclusive, same rounding as the trade path).
+- **Charts**: real OHLC candles (TradingView's lightweight-charts engine) fed by the
+  indexer's `/candles` aggregation, in its own lazy chunk.
+- **Trust surface**: `Holders` and `Positions` are *nominated* by the indexer but every
+  displayed number is a live on-chain `balanceOf` read.
 
-## Run the whole thing locally
+```
+shared/     normalization + types + generated ABIs + whitelist tooling
+contracts/  Foundry: WordRegistry · WordMarket · DeedMarketplace — 91 tests
+indexer/    CF Worker: indexer → D1, REST API, OG images, social layer
+web/        React + Vite + wagmi/viem + Tailwind
+```
 
-Prereqs: [Foundry](https://book.getfoundry.sh) (anvil/forge), Node 20+, `jq`.
+## Run it locally
+
+Prereqs: [Foundry](https://book.getfoundry.sh), Node 20+, `jq`.
 
 ```bash
-make install                 # all JS deps + Foundry libs
-make merkle                  # build whitelist root + proofs from the address list (default: anvil accts)
-
-# 4 terminals (or backgrounded):
-make chain                   # 1) anvil on :8545
-make deploy                  # 2) deploy + write shared/deployments/anvil.json
-make seed                    # 3) demo data: claims, a listing, a sale
-make indexer-dev             # 4) apply D1 schema + run the Worker on :8787
-
-make seed-social             #    demo profiles + comments + watchlist (off-chain, via the API)
-cp web/.env.example web/.env # set VITE_USE_ANVIL=1 + the two deployed addresses (deterministic anvil)
-make web-dev                 # 5) app on :5173
+make install && make merkle
+make chain        # anvil :8545
+make deploy       # + writes shared/deployments/anvil.json
+make seed         # demo claims/trades/listings
+make indexer-dev  # D1 schema + Worker :8787
+make web-dev      # app :5173  (cp web/.env.example web/.env first)
 ```
 
-The indexer's `/admin/*` endpoints require `Authorization: Bearer ${ADMIN_TOKEN}` (set in
-`indexer/wrangler.toml`); the cron triggers indexing automatically in production.
+Tests: `make test` (shared parity + forge + indexer) · e2e: `cd web && npm run e2e` ·
+CI runs all of it + Slither (`fail-on: medium`) + coverage + gas snapshots.
 
-Open http://localhost:5173 — claim a word, see it on your profile, list it, buy it from another
-wallet, watch it climb the leaderboard. Connect any of the default anvil accounts (they're the
-default whitelist).
+## Deploy
 
-## Tests
+Testnet: `forge script script/Deploy.s.sol:Deploy --rpc-url base_sepolia --broadcast`,
+then point `indexer/wrangler.toml` and `web/.env.production` at
+`shared/deployments/baseSepolia.json`, and reserve the brand list with
+`script/Reserve.s.sol`. Mainnet: **[MAINNET.md](MAINNET.md)** — the deploy is one command;
+the gate before it (external audit, multisig ownership, reserved words, legal) is human.
 
-```bash
-make test          # shared (TS parity) + contracts (forge) + indexer (vitest)
-```
-
-- **contracts** — unit + invariant + normalization-parity + Merkle-tooling tests; **100% line
-  coverage** on all three contracts. Invariants proven over thousands of randomized calls:
-  uniqueness, reserved-never-claimable, claim-limit-not-bypassable, all-holders-whitelisted,
-  marketplace solvency.
-- **shared** — normalization vectors + collision correctness (same fixture as the Solidity suite).
-- **indexer** — idempotency, reorg replay, reconciliation drift-correction, and API shape, backed by
-  `node:sqlite` (D1-compatible). Plus an opt-in live test against a running anvil.
-- **e2e (Playwright)** — full flow against the local stack: claim → profile → list → buy from a
-  second account → leaderboard. The headless wallet forwards to anvil (unlocked accounts auto-sign).
-  ```bash
-  # with chain + indexer + web running (and a fresh deploy + seed):
-  cd web && npx playwright install chromium && npm run e2e
-  ```
-- **CI** (`.github/workflows/ci.yml`) runs all of the above plus **Slither** (`fail-on: medium`),
-  `forge coverage`, and gas snapshots.
-
-## Deploy to Base Sepolia
-
-```bash
-cp .env.example .env          # fill DEPLOYER_PRIVATE_KEY (testnet!), PROTOCOL_FEE_RECEIVER, RPC
-cd contracts/tools && node merkle.mjs whitelist.txt   # your real allowlist -> root + proofs
-cd .. && forge script script/Deploy.s.sol:Deploy --rpc-url base_sepolia --broadcast -vvvv
-# then point indexer/wrangler.toml [vars] + web/.env at the deployed addresses.
-```
-
-## HUMAN TASKS (not automated — `TODO(operator)` markers in code)
-
-1. **Secrets / accounts** — RPC URL, WalletConnect project id, Cloudflare account + D1 + R2, deployer
-   key. Fill `.env` / `web/.env` / `indexer/wrangler.toml`. Nothing is hardcoded or fabricated.
-2. **Deployer key + multisig** — provide a testnet deployer key; mainnet keys and the owner multisig
-   (Safe) are operator-only and out of scope. Contract `owner()` should become the multisig.
-3. **Reserved list** — supply the real words to ban (brands, names, trademarks, slurs). Deploy seeds
-   one example (`bitcoin`); load the rest via `setReservedBatch`.
-4. **Whitelist addresses** — supply the closed-beta allowlist. The Merkle plumbing + `merkle.mjs`
-   root/proof generator ship here; the addresses are yours. Default state is closed
-   (`whitelistEnabled = true`).
-5. **Protocol fee receiver** — placeholder only; set the real address.
-6. **Mainnet deploy** — out of scope. Testnet only.
-7. **Audit, legal/securities review, brand/visual taste, growth** — all human, all out of scope. The
-   v2 bonding-curve layer is gated behind these. The UI ships a clean neutral theme retunable via the
-   CSS variables in `web/src/index.css`.
+> ⚠️ Experimental testnet software. Not an investment product; no returns promised or
+> implied. Mainnet is gated on an external audit — do not use with real funds until then.

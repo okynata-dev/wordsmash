@@ -19,6 +19,24 @@ export function useWrongNetwork(): boolean {
   return isConnected && chainId !== activeChain.id;
 }
 
+/** Snipe-proof claim mode: when on, claims go commit → wait → reveal. */
+export function useCommitReveal() {
+  const enabled = useReadContract({
+    ...registry,
+    functionName: "commitRevealEnabled",
+    query: { enabled: ADDRESSES_READY, refetchInterval: 60_000 },
+  });
+  const delay = useReadContract({
+    ...registry,
+    functionName: "commitMinDelay",
+    query: { enabled: ADDRESSES_READY && enabled.data === true },
+  });
+  return {
+    enabled: enabled.data === true,
+    minDelaySec: delay.data !== undefined ? Number(delay.data) : 30,
+  };
+}
+
 export function useClaimFee() {
   return useReadContract({
     ...registry,

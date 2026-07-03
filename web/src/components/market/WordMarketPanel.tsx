@@ -14,6 +14,7 @@ import { asMarketAddress, useMarketReads, useTokenBalance } from "../../hooks/us
 import { TradeBox } from "./TradeBox";
 import { DeedFees } from "./DeedFees";
 import { RecentTrades } from "./RecentTrades";
+import { Holders } from "./Holders";
 
 // lightweight-charts ships in its own chunk — loaded only when a market renders.
 const TradingChart = lazy(() => import("./TradingChart"));
@@ -290,6 +291,9 @@ export function WordMarketPanel({
           />
           <AboutRow label="Status" value={graduated ? "Graduated 🎓" : "Live"} last />
         </Card>
+
+        {/* Who holds the token — live on-chain balances. */}
+        <Holders word={word} market={marketAddr} deedOwner={deedOwner} />
       </div>
     </section>
   );
