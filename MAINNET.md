@@ -10,12 +10,19 @@ before pressing the button is **process, not code** — see the human gate below
 1. **External professional audit** of `contracts/src` (the internal audit in SECURITY.md is
    thorough but not a substitute — real funds need independent eyes).
 2. **Multisig ownership.** Deploy from a fresh key, then transfer `owner()` of the registry
-   and marketplace to a Safe (2/3 or better):
+   and marketplace to a Safe (2/3 or better — a Ledger works well as one of the signers;
+   a bare Ledger-EOA owner is an acceptable solo-founder interim but leaves single-device
+   loss and blind-signing phishing as full-admin risks):
    ```
    cast send $REGISTRY "transferOwnership(address)" $SAFE --rpc-url base ...
    cast send $MARKETPLACE "transferOwnership(address)" $SAFE --rpc-url base ...
    ```
-3. **PROTOCOL_FEE_RECEIVER** = a multisig/treasury address, never an EOA hot key.
+3. **PROTOCOL_FEE_RECEIVER** = a hardware wallet you control (Ledger is fine — the role
+   only receives money and has zero protocol power) or a treasury multisig. Never a hot
+   key. NOTE: each WordMarket clone bakes the receiver in at claim time with no setter —
+   keep the seed phrase safe, because fees on already-created markets can only ever be
+   claimed by that address (`claimProtocolFees()` must be CALLED by it, one tx per market;
+   the registry/marketplace pots are aggregate and rotatable via `setProtocolFeeReceiver`).
 4. **Reserved-words list** (brands, trademarks, slurs) loaded via `setReservedBatch` —
    legal/product decision.
 5. **Whitelist stance**: launch closed-beta (root from `contracts/tools/merkle.mjs`) or
