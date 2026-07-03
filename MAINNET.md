@@ -56,6 +56,26 @@ cd indexer && npx wrangler deploy
 cd web && npx vite build && npx wrangler pages deploy dist --project-name=wordsmash
 ```
 
+## Graduation → DEX migration
+
+`WordMarket.migrate()` is a **permissionless crank**: once a market graduates, anyone can
+move its reserve ETH + remaining curve tokens into a full-range Uniswap v3 position whose
+LP NFT is minted straight to `0x…dEaD` — **liquidity locked forever, LP-rug structurally
+impossible**. The call is atomic (a failing adapter rolls everything back) and inert until
+the owner wires an adapter:
+
+```bash
+# deploy the adapter (constructor: positionManager, WETH, registry, dustReceiver, fee, tickSpacing)
+forge create src/UniV3Migrator.sol:UniV3Migrator --rpc-url $RPC ... \
+  --constructor-args $UNIV3_POSITION_MANAGER $WETH $REGISTRY $TREASURY 10000 200
+cast send $REGISTRY "setMigrator(address)" $MIGRATOR   # from the Safe
+```
+On Base mainnet use the canonical Uniswap v3 `NonfungiblePositionManager` and `WETH9`
+addresses from Uniswap's deployments page (verify code exists at both with `cast code`
+before wiring). Ship with the migrator UNSET and wire it post-audit — graduated markets
+keep their sells open on the curve until then, so nothing is ever stuck either way.
+After migration, curve fee pots (deed + protocol) remain claimable on the market forever.
+
 ## Post-deploy verification battery
 
 ```bash

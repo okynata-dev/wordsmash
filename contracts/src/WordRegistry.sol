@@ -63,6 +63,9 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     // --- v2: per-word bonding-curve market ---
     address public immutable marketImplementation; // WordMarket logic, cloned per word
     WordMarket.Config public marketConfig;
+    /// @notice DEX-migration adapter consulted by every market's migrate(). address(0)
+    ///         keeps migration dormant (graduated markets simply keep sells open).
+    address public migrator;
     mapping(uint256 => address) public marketOfTokenId; // deed tokenId => market clone
     mapping(address => uint256) public deedOfMarket; // market clone => deed tokenId
 
@@ -79,6 +82,7 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     event PausedUpdated(bool paused);
     event CommitRevealUpdated(bool enabled, uint256 minDelay);
     event ClaimCommitted(bytes32 indexed commitment);
+    event MigratorUpdated(address migrator);
 
     constructor(
         address protocolFeeReceiver_,
@@ -344,6 +348,14 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     function setPaused(bool paused_) external onlyOwner {
         paused = paused_;
         emit PausedUpdated(paused_);
+    }
+
+    /// @notice Wire (or unwire) the DEX-migration adapter used by graduated markets.
+    ///         Setting it never moves funds by itself — migrate() is a public crank on
+    ///         each market and is atomic against a broken adapter.
+    function setMigrator(address migrator_) external onlyOwner {
+        migrator = migrator_;
+        emit MigratorUpdated(migrator_);
     }
 
     /// @notice Toggle snipe-proof claims and tune the commit age window (bounded so the

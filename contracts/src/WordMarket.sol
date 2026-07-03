@@ -8,6 +8,14 @@ interface IDeedRegistry {
     function ownerOf(uint256 tokenId) external view returns (address);
     function isAllowed(address account) external view returns (bool);
     function paused() external view returns (bool);
+    function migrator() external view returns (address);
+}
+
+interface IMigrator {
+    /// @notice Receive a graduated market's reserve ETH (msg.value) + remaining curve
+    ///         tokens and create locked DEX liquidity. MUST revert on any failure —
+    ///         migrate() is atomic; funds never strand half-way.
+    function migrate(address token, uint256 tokenAmount) external payable returns (address pool);
 }
 
 /// @title WordMarket (v2)
@@ -47,6 +55,8 @@ contract WordMarket is ERC20, ReentrancyGuard {
     uint256 public realEthReserve; // actual ETH backing the curve (excludes fee pots)
     uint256 public graduationThreshold;
     bool public graduated;
+    bool public migrated; // liquidity moved to the DEX (see migrate())
+    address public dexPool; // the pool created at migration (address(0) until then)
 
     uint16 public tradeFeeBps;
     uint16 public protocolBps;
@@ -67,6 +77,7 @@ contract WordMarket is ERC20, ReentrancyGuard {
     event DeedFeesClaimed(address indexed to, uint256 amount);
     event ProtocolFeesClaimed(address indexed to, uint256 amount);
     event Graduated(uint256 realEthReserve);
+    event Migrated(address indexed migrator, address indexed pool, uint256 ethAmount, uint256 tokenAmount);
 
     /// @dev Lock the implementation (clone template) so it can never be initialized directly.
     ///      Clones (EIP-1167) get their own fresh storage and run `initialize` normally; this only
@@ -155,10 +166,10 @@ contract WordMarket is ERC20, ReentrancyGuard {
     }
 
     /// @notice Sell tokens back to the curve for ETH. Fee taken from the ETH proceeds.
-    /// @dev Selling stays open even after graduation, so holders can ALWAYS exit — graduation
-    ///      freezes buys (curve growth) but never traps anyone's funds. This removes the
-    ///      "stranded reserve" and "force-graduation griefing" risks that a full freeze would create
-    ///      while DEX migration is still on the roadmap.
+    /// @dev Selling stays open after graduation, so holders can ALWAYS exit: before
+    ///      migration they exit here; after migrate() empties the reserve into a locked
+    ///      DEX pool, sells here revert (INSUFFICIENT_ETH) and the exit lives on the DEX.
+    ///      Either way there is never a moment without a permissionless exit.
     ///      DELIBERATELY UNGATED: no whitelist and no pause. The exit is permissionless by
     ///      construction — no admin action, gate flip or emergency switch can ever freeze a
     ///      holder's ability to sell. Tokens are plain ERC-20 and routinely reach wallets that
@@ -204,6 +215,37 @@ contract WordMarket is ERC20, ReentrancyGuard {
         // The liquidity share deepens the curve's real backing instead of stranding in a
         // pot nothing can spend: it counts toward graduation and cushions seller exits.
         realEthReserve += toLiquidity;
+    }
+
+    // ── graduation → DEX migration ─────────────────────────────────────────────
+
+    /// @notice Move a graduated market's liquidity to a DEX pool. Permissionless crank:
+    ///         once graduated, ANYONE may trigger it — no admin needed, no admin able to
+    ///         block it (censorship-resistance for the exit path). Atomic and once-only:
+    ///         if the migrator can't mint the pool position, everything reverts and the
+    ///         curve keeps working exactly as before. Inert until the registry owner
+    ///         wires a migrator, so the feature can ship dark and be enabled post-audit.
+    /// @dev    After migration the curve's reserve is zero, so sell() naturally closes
+    ///         (INSUFFICIENT_ETH) — holders exit on the DEX instead, where the liquidity
+    ///         position is locked forever (the migrator burns the LP to a dead address).
+    ///         Fee pots (deedFeesOf / protocolFeesAccrued) are untouched and stay
+    ///         claimable here forever.
+    function migrate() external nonReentrant returns (address pool) {
+        require(graduated, "NOT_GRADUATED");
+        require(!migrated, "ALREADY_MIGRATED");
+        address migrator_ = registry.migrator();
+        require(migrator_ != address(0), "NO_MIGRATOR");
+
+        migrated = true;
+        uint256 ethAmount = realEthReserve;
+        realEthReserve = 0;
+        uint256 tokenAmount = balanceOf(address(this));
+        if (tokenAmount > 0) _transfer(address(this), migrator_, tokenAmount);
+
+        pool = IMigrator(migrator_).migrate{value: ethAmount}(address(this), tokenAmount);
+        require(pool != address(0), "MIGRATION_FAILED");
+        dexPool = pool;
+        emit Migrated(migrator_, pool, ethAmount, tokenAmount);
     }
 
     // ── fee withdrawal ─────────────────────────────────────────────────────────

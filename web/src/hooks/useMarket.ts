@@ -37,6 +37,8 @@ export function useMarketReads(market?: string | null) {
           { ...base, functionName: "deedFeesAccrued" },
           { ...base, functionName: "totalEthVolume" },
           { ...base, functionName: "marketCapWei" },
+          { ...base, functionName: "migrated" },
+          { ...base, functionName: "dexPool" },
         ]
       : [],
     // Poll so price / market cap / volume stay live even when someone else trades.
@@ -56,6 +58,9 @@ export function useMarketReads(market?: string | null) {
     deedFeesWei: val<bigint>(4),
     volumeWei: val<bigint>(5),
     marketCapWei: val<bigint>(6),
+    // allowFailure degrades these to undefined on pre-migration deployments
+    migrated: val<boolean>(7) ?? false,
+    dexPool: (val<string>(8) ?? null) as string | null,
   };
 }
 

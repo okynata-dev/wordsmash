@@ -81,6 +81,7 @@ export function WordMarketPanel({
     reads.marketCapWei ?? (info ? (toWei(info.marketCapWei) ?? undefined) : undefined);
   const volumeWei = reads.volumeWei ?? (info ? (toWei(info.volumeWei) ?? undefined) : undefined);
   const graduated = reads.graduated ?? info?.graduated ?? false;
+  const migrated = reads.migrated;
   const symbol = reads.symbol ?? info?.tokenSymbol;
   const deedOwner = reads.deedOwner ?? null;
   const deedFeesWei = reads.deedFeesWei ?? (info ? (toWei(info.deedFeesWei) ?? 0n) : 0n);
@@ -220,7 +221,24 @@ export function WordMarketPanel({
       <div className="flex flex-col gap-4 lg:sticky lg:top-[84px]">
         {/* Buy / Sell box. After graduation the contract freezes buys but keeps
             sell() open, so we keep the Sell tab usable and only freeze Buy. */}
-        {!isConnected || wrongNetwork ? (
+        {migrated ? (
+          // Liquidity has moved to a locked DEX pool — the curve is done; trading
+          // (and every holder's exit) lives on the DEX now.
+          <Card className="fade-up flex flex-col items-center gap-3 p-5 text-center text-sm text-muted">
+            <span>
+              🎓 This market graduated and its liquidity now lives in a locked DEX pool.
+              Trade {symbol ? `$${symbol}` : "the token"} there.
+            </span>
+            <a
+              href={`https://app.uniswap.org/swap?outputCurrency=${marketAddr}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg transition hover:opacity-90"
+            >
+              Open on Uniswap ↗
+            </a>
+          </Card>
+        ) : !isConnected || wrongNetwork ? (
           <Card className="fade-up flex flex-col items-center gap-3 p-5 text-sm text-muted">
             <span>
               {wrongNetwork
