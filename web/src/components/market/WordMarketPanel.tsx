@@ -15,9 +15,32 @@ import { TradeBox } from "./TradeBox";
 import { DeedFees } from "./DeedFees";
 import { RecentTrades } from "./RecentTrades";
 import { Holders } from "./Holders";
+import { TVChart } from "./TVChart";
 
 // lightweight-charts ships in its own chunk — loaded only when a market renders.
 const TradingChart = lazy(() => import("./TradingChart"));
+
+/**
+ * Full TradingView Advanced Charts when the (self-hosted, license-gated) library is
+ * installed; our lightweight-charts candles otherwise. TVChart signals unavailability
+ * so this flips to the fallback with no layout jump and no dependency on the vendor
+ * folder being present.
+ */
+function MarketChart({ word, symbol }: { word: string; symbol?: string | null }) {
+  const [tvOut, setTvOut] = useState(false);
+  if (tvOut) {
+    return (
+      <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-xl" />}>
+        <TradingChart word={word} />
+      </Suspense>
+    );
+  }
+  return (
+    <Card className="fade-up p-0" style={{ animationDelay: "60ms" }}>
+      <TVChart word={word} symbol={symbol} onUnavailable={() => setTvOut(true)} />
+    </Card>
+  );
+}
 
 /**
  * The coin/trading view for a claimed word. Composes the price header, an inline
@@ -208,10 +231,8 @@ export function WordMarketPanel({
           />
         </Card>
 
-        {/* Trading chart (candles + volume) */}
-        <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-xl" />}>
-          <TradingChart word={word} />
-        </Suspense>
+        {/* Trading chart — TradingView Advanced Charts if installed, candles otherwise */}
+        <MarketChart word={word} symbol={symbol} />
 
         {/* Recent trades */}
         <RecentTrades word={word} symbol={symbol} />

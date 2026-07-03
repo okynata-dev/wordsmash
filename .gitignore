@@ -37,3 +37,8 @@ contracts/.seed-actors.env
 # wrangler build/deploy temp
 web/.wrangler/
 .wrangler/
+
+# TradingView Charting Library — license-gated, self-hosted, never committed
+# (keep the placeholder so the folder exists)
+web/public/charting_library/*
+!web/public/charting_library/.gitkeep

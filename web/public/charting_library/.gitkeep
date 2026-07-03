@@ -1,0 +1,5 @@
+Place the TradingView Charting Library here (license-gated, self-hosted).
+After access is granted at https://www.tradingview.com/advanced-charts/ , copy the
+library's charting_library/ folder contents here so the runtime loads
+/charting_library/charting_library.js. Do NOT commit the actual library — its
+license forbids public redistribution (see the repo .gitignore).
