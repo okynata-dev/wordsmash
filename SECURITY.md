@@ -124,6 +124,9 @@ testnet):
    documented behavior + UI warning (the web app now warns in the listing flow).
 6. **M: no pause switch** — add `Pausable` to `buy()` paths only (`sell()`/`withdraw()`/
    `claimFees()` stay always-live so a pause can never trap funds).
+7. **L: `totalEthVolume` basis is inconsistent** — buys add net `ethIn`, sells add gross
+   `grossEthOut`, and the `Trade` event emits the opposite basis per leg, so contract vs
+   indexer volume drift by ±1% per leg. Pick one basis (emit gross both legs) at redeploy.
 
 Frontend/API fixes shipped in the same pass: per-call `chainId` on every write (wrong-network
 sends were possible for external wallets), `useWrongNetwork` reads the live connection chain,

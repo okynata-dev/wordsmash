@@ -220,13 +220,20 @@ export default {
       // /word/:word/chart  (v2 token-market price series)
       if (parts[0] === "word" && parts[1] != null && parts[2] === "chart") {
         const word = decodeURIComponent(parts[1]);
-        return json(await getWordChart(db, word));
+        // Closed candles/points are immutable — a short shared cache blunts both
+        // the per-open-chart polling and any hammering of this 200-row scan.
+        return json(await getWordChart(db, word), {
+          headers: { "Cache-Control": "public, max-age=10" },
+        });
       }
 
       // /word/:word/candles?res=  (OHLC for the trading chart)
       if (parts[0] === "word" && parts[1] != null && parts[2] === "candles") {
         const word = decodeURIComponent(parts[1]);
-        return json(await getWordCandles(db, word, url.searchParams.get("res")));
+        // Same reasoning as /chart — this one scans up to 5000 trades per hit.
+        return json(await getWordCandles(db, word, url.searchParams.get("res")), {
+          headers: { "Cache-Control": "public, max-age=10" },
+        });
       }
 
       if (parts[0] === "word" && parts[1] != null) {

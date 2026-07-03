@@ -110,7 +110,7 @@ export function Profile() {
                     </span>
                     <span>
                       <span className="font-semibold tabular-nums">{ethLabel(data.stats.volumeWei)}</span>{" "}
-                      <span className="text-muted">volume</span>
+                      <span className="text-muted">deed volume</span>
                     </span>
                   </div>
                 </div>

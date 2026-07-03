@@ -42,7 +42,8 @@ export function How() {
           Every buy and sell pays a 1% fee, split three ways: 0.4% to the deed holder,
           0.5% to the protocol, 0.1% retained in the curve as liquidity. Hold the deed
           of a busy word and you earn on every single trade. Deeds themselves can be
-          listed and resold on the marketplace, so the earning right has a price too.
+          listed and resold on the marketplace (a 10% marketplace fee comes out of the
+          sale price), so the earning right has a price too.
         </Step>
       </section>
 
@@ -62,6 +63,7 @@ export function How() {
             <AddrLink addr={DEED_MARKETPLACE} explorer={explorer} />
           </Row>
           <Row k="Trade fee">1% per trade: 0.4% deed holder / 0.5% protocol / 0.1% liquidity</Row>
+          <Row k="Deed sale fee">10% of the sale price, deducted from the seller&rsquo;s proceeds</Row>
           <Row k="Keep fee">{fee}, set on-chain and readable by anyone</Row>
         </Card>
         <p className="mt-3 text-xs leading-relaxed text-faint">

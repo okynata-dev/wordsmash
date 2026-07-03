@@ -61,6 +61,14 @@ export function WalletPanelProvider({ children }: { children: ReactNode }) {
     the account menu. Send is irreversible, so it goes through a review step. */
 function WalletPanel({ address, onClose }: { address: Address; onClose: () => void }) {
   const toast = useToast();
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Refetch while open: the panel can sit open across a trade/claim and must not
   // show a stale balance in a money UI.
   const { data: bal } = useBalance({ address, query: { refetchInterval: 12_000 } });

@@ -97,6 +97,11 @@ export default function TradingChart({ word }: { word: string }) {
       </div>
       {query.isLoading ? (
         <Skeleton className="h-[280px] w-full rounded-lg" />
+      ) : query.isError ? (
+        // An outage must not read as "no trades". The 15s poll retries silently.
+        <div className="grid h-[280px] place-items-center text-sm text-muted">
+          Couldn’t load the chart — retrying…
+        </div>
       ) : candles.length === 0 ? (
         <div className="grid h-[280px] place-items-center text-sm text-muted">
           No trades yet — the chart starts with the first one.

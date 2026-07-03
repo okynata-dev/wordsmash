@@ -5,6 +5,7 @@ import { api } from "../api";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./ui";
 import { shortAddr, normAddr } from "../lib/format";
+import { normalizeWord } from "@shared/normalize";
 
 type Item =
   | { kind: "word"; word: string }
@@ -81,9 +82,23 @@ export function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
       e.preventDefault();
       setActive((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
+      e.preventDefault();
       if (active >= 0 && items[active]) {
-        e.preventDefault();
         go(items[active]);
+        return;
+      }
+      // No arrow selection: take the first result, or fall through to the word
+      // page for whatever was typed — Enter must never be a silent no-op.
+      if (items[0]) {
+        go(items[0]);
+        return;
+      }
+      const norm = normalizeWord(q);
+      if (norm.ok) {
+        navigate(`/word/${encodeURIComponent(norm.normalized)}`);
+        setOpen(false);
+        setQ("");
+        onNavigate?.();
       }
     }
   }

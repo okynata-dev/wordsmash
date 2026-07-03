@@ -10,7 +10,8 @@ export function Activity() {
           Activity <LiveBadge />
         </h1>
       </header>
-      <ActivityFeed />
+      {/* The header says LIVE — poll at the fast (~4s) cadence to match. */}
+      <ActivityFeed live />
     </div>
   );
 }

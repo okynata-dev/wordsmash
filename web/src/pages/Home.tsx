@@ -22,7 +22,13 @@ import { UserBadge } from "../components/UserBadge";
 import { useToast } from "../components/Toast";
 import { friendlyError, ethLabel, timeAgo } from "../lib/format";
 import { useSyncAfterTx } from "../hooks/useSyncAfterTx";
-import { useClaimFee, useRemainingClaims, useWrongNetwork } from "../hooks/useRegistry";
+import {
+  useClaimFee,
+  useRemainingClaims,
+  useWrongNetwork,
+  useWhitelistEnabled,
+  useIsAllowed,
+} from "../hooks/useRegistry";
 
 type State =
   | { kind: "idle" }
@@ -64,6 +70,11 @@ export function Home() {
 
   const { data: claimFee } = useClaimFee();
   const { data: remaining, refetch: refetchRemaining } = useRemainingClaims(address);
+  // The BUTTON path is whitelist-gated by <WhitelistGate>; the Enter-key path must
+  // apply the same rule or a non-allowlisted wallet can fire a doomed claim tx.
+  const { data: whitelistEnabled } = useWhitelistEnabled();
+  const { data: allowed } = useIsAllowed(address);
+  const whitelistClear = whitelistEnabled === false || allowed === true;
   const { sync, syncing } = useSyncAfterTx();
 
   // Live, local-first validation. Normalize instantly; only hit /check for taken-state.
@@ -240,6 +251,7 @@ export function Home() {
                   state.kind === "available" &&
                   isConnected &&
                   !wrongNetwork &&
+                  whitelistClear &&
                   !outOfClaims &&
                   claimFee !== undefined &&
                   !isPending &&

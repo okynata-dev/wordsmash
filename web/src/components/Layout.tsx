@@ -105,6 +105,15 @@ function MoonIcon({ className = "" }: IconProps) {
     Icon-only in the sidebar footer; `labeled` for the roomier mobile menu. */
 function ThemeToggle({ labeled = false }: { labeled?: boolean }) {
   const [theme, setTheme] = useState<Theme>(storedTheme);
+  // Two instances exist (sidebar + mobile menu). Track the <html> class so a
+  // toggle in one never leaves the other showing a stale icon.
+  useEffect(() => {
+    const mo = new MutationObserver(() =>
+      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light"),
+    );
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
   function toggle() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);

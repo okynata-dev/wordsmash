@@ -12,7 +12,13 @@ import {
   useWriteContract,
 } from "wagmi";
 import type { WordRow } from "@shared/types";
-import { wordMarketAbi, deedMarketplaceAbi, marketplaceAddress } from "../contracts";
+import {
+  wordMarketAbi,
+  wordRegistryAbi,
+  deedMarketplaceAbi,
+  marketplaceAddress,
+  registryAddress,
+} from "../contracts";
 import { activeChain } from "../wagmi";
 import { asMarketAddress } from "../hooks/useMarket";
 import { ADDRESSES_READY } from "../config";
@@ -25,18 +31,39 @@ export function EarningsCard({ address, owned }: { address: Address; owned: Word
   const markets = useMemo(
     () =>
       owned
-        .map((w) => ({ word: w.word, market: asMarketAddress(w.market) }))
-        .filter((x): x is { word: string; market: Address } => Boolean(x.market)),
+        .map((w) => {
+          try {
+            return { word: w.word, market: asMarketAddress(w.market), tokenId: BigInt(w.tokenId) };
+          } catch {
+            return { word: w.word, market: undefined, tokenId: null };
+          }
+        })
+        .filter(
+          (x): x is { word: string; market: Address; tokenId: bigint } =>
+            Boolean(x.market) && x.tokenId !== null,
+        ),
     [owned],
   );
 
+  // Two reads per word: the accrued fees AND the registry's own record of the
+  // word's market. The market address arrives from the INDEXER (API data) but
+  // Claim is a silently-signed write — never send it anywhere the on-chain
+  // registry doesn't confirm.
   const feeReads = useReadContracts({
     allowFailure: true,
-    contracts: markets.map((m) => ({
-      address: m.market,
-      abi: wordMarketAbi,
-      functionName: "deedFeesAccrued" as const,
-    })),
+    contracts: markets.flatMap((m) => [
+      {
+        address: m.market,
+        abi: wordMarketAbi,
+        functionName: "deedFeesAccrued" as const,
+      },
+      {
+        address: registryAddress,
+        abi: wordRegistryAbi,
+        functionName: "marketOfTokenId" as const,
+        args: [m.tokenId] as const,
+      },
+    ]),
     query: { enabled: ADDRESSES_READY && markets.length > 0, refetchInterval: 30_000 },
   });
   const pending = useReadContract({
@@ -48,12 +75,20 @@ export function EarningsCard({ address, owned }: { address: Address; owned: Word
   });
 
   const rows = markets
-    .map((m, i) => ({
-      ...m,
-      fees:
-        feeReads.data?.[i]?.status === "success" ? (feeReads.data[i].result as bigint) : 0n,
-    }))
-    .filter((r) => r.fees > 0n);
+    .map((m, i) => {
+      const fees =
+        feeReads.data?.[2 * i]?.status === "success"
+          ? (feeReads.data[2 * i].result as bigint)
+          : 0n;
+      const registryMarket =
+        feeReads.data?.[2 * i + 1]?.status === "success"
+          ? (feeReads.data[2 * i + 1].result as string)
+          : null;
+      const verified =
+        registryMarket !== null && registryMarket.toLowerCase() === m.market.toLowerCase();
+      return { ...m, fees, verified };
+    })
+    .filter((r) => r.fees > 0n && r.verified);
   const proceeds = (pending.data as bigint | undefined) ?? 0n;
   const total = rows.reduce((a, r) => a + r.fees, 0n) + proceeds;
 
@@ -100,7 +135,10 @@ function FeeRow({
   const receipt = useWaitForTransactionReceipt({ hash });
   useReceiptError(receipt, "The fee claim");
   useEffect(() => {
-    if (receipt.isSuccess) onClaimed(); // row disappears once fees read back zero
+    if (receipt.isSuccess) {
+      toast.success("Fees claimed");
+      onClaimed(); // row disappears once fees read back zero
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipt.isSuccess]);
   const busy = isPending || receipt.isLoading;
@@ -146,7 +184,10 @@ function ProceedsRow({ amount, onDone }: { amount: bigint; onDone: () => void })
   const receipt = useWaitForTransactionReceipt({ hash });
   useReceiptError(receipt, "The withdrawal");
   useEffect(() => {
-    if (receipt.isSuccess) onDone();
+    if (receipt.isSuccess) {
+      toast.success("Withdrawn to your wallet");
+      onDone();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipt.isSuccess]);
   const busy = isPending || receipt.isLoading;

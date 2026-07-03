@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatUnits, parseEther, parseUnits, type Address } from "viem";
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { formatEther, formatUnits, parseEther, parseUnits, type Address } from "viem";
+import { useAccount, useBalance, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { wordMarketAbi } from "../../contracts";
 import { activeChain } from "../../wagmi";
 import { useReceiptError } from "../../hooks/useReceiptError";
@@ -164,7 +164,18 @@ function BuyPanel({
   }, [input]);
 
   const invalid = input.trim() !== "" && ethWei === null;
-  const { data: quote, isFetching: quoting } = useQuoteBuy(market, ethWei);
+
+  // Show the wallet's ETH and refuse over-balance amounts here, with words —
+  // not later at gas estimation with a raw RPC error.
+  const { address } = useAccount();
+  const { data: ethBal } = useBalance({ address, query: { refetchInterval: 15_000 } });
+  const overBalance = ethWei !== null && ethBal !== undefined && ethWei > ethBal.value;
+
+  const {
+    data: quote,
+    isFetching: quoting,
+    isError: quoteFailed,
+  } = useQuoteBuy(market, ethWei !== null && !overBalance ? ethWei : null);
   const tokensOut = quote as bigint | undefined;
   const minOut = tokensOut !== undefined ? applySlippage(tokensOut, slippageBps) : undefined;
 
@@ -181,7 +192,7 @@ function BuyPanel({
   }, [isSuccess]);
 
   const busy = isPending || confirming || syncing;
-  const canSubmit = ethWei !== null && minOut !== undefined && !busy;
+  const canSubmit = ethWei !== null && !overBalance && minOut !== undefined && !busy;
 
   return (
     <div className="space-y-3">
@@ -191,8 +202,13 @@ function BuyPanel({
         value={input}
         onChange={setInput}
         suffix="ETH"
-        invalid={invalid}
+        invalid={invalid || overBalance}
       />
+      {ethBal !== undefined && (
+        <p className="text-xs text-faint">
+          Balance: {Number(formatEther(ethBal.value)).toLocaleString("en-US", { maximumFractionDigits: 5 })} ETH
+        </p>
+      )}
 
       {/* One-tap amounts — most buys are a standard size, don't make people type. */}
       <div className="flex gap-1.5" role="group" aria-label="Quick amounts">
@@ -221,6 +237,12 @@ function BuyPanel({
               : "—"
         }
       />
+      {quoteFailed && ethWei !== null && !overBalance && (
+        <p className="text-xs text-warning">
+          Couldn’t quote this amount — it may exceed what the curve can sell. Try a
+          smaller amount.
+        </p>
+      )}
       {minOut !== undefined && (
         <p className="text-xs text-faint">
           Min after {slippageBps / 100}% slippage: {tokenLabel(minOut, symbol)}
@@ -256,6 +278,7 @@ function BuyPanel({
           "Buy"
         )}
       </Button>
+      {overBalance && <p className="text-xs text-negative">More than your ETH balance.</p>}
       {invalid && <p className="text-xs text-negative">Enter a positive ETH amount.</p>}
     </div>
   );
@@ -300,10 +323,11 @@ function SellPanel({
 
   const overBalance = tokenWei !== null && tokenWei > bal;
   const invalid = input.trim() !== "" && tokenWei === null;
-  const { data: quote, isFetching: quoting } = useQuoteSell(
-    market,
-    tokenWei !== null && !overBalance ? tokenWei : null,
-  );
+  const {
+    data: quote,
+    isFetching: quoting,
+    isError: quoteFailed,
+  } = useQuoteSell(market, tokenWei !== null && !overBalance ? tokenWei : null);
   const ethOut = quote as bigint | undefined;
   const minOut = ethOut !== undefined ? applySlippage(ethOut, slippageBps) : undefined;
 
@@ -362,6 +386,11 @@ function SellPanel({
               : "—"
         }
       />
+      {quoteFailed && tokenWei !== null && !overBalance && (
+        <p className="text-xs text-warning">
+          Couldn’t quote this amount — try a smaller one.
+        </p>
+      )}
       {minOut !== undefined && (
         <p className="text-xs text-faint">
           Min after {slippageBps / 100}% slippage: {ethLabel(minOut)}

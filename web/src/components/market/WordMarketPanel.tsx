@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import type { MarketInfo } from "@shared/types";
 import { api } from "../../api";
+import { registryAddress, wordRegistryAbi, wordToTokenId } from "../../contracts";
+import { ADDRESSES_READY } from "../../config";
 import { Card, Pill, Skeleton } from "../ui";
 import { WhitelistGate } from "../WhitelistGate";
 import { WalletButton } from "../WalletButton";
@@ -44,6 +46,22 @@ export function WordMarketPanel({
   const reads = useMarketReads(info?.market);
   const balanceQuery = useTokenBalance(info?.market, address);
   const balance = (balanceQuery.data as bigint | undefined) ?? 0n;
+
+  // The market address comes from the INDEXER (API data), but the TradeBox sends
+  // real ETH to it. Confirm it against the on-chain registry before rendering any
+  // write surface — a compromised API must never be able to redirect a buy.
+  const wordTokenId = wordToTokenId(word);
+  const { data: registryMarket } = useReadContract({
+    address: registryAddress,
+    abi: wordRegistryAbi,
+    functionName: "marketOfTokenId",
+    args: wordTokenId !== null ? [wordTokenId] : undefined,
+    query: { enabled: ADDRESSES_READY && wordTokenId !== null && Boolean(marketAddr) },
+  });
+  const marketVerified =
+    Boolean(marketAddr) &&
+    typeof registryMarket === "string" &&
+    registryMarket.toLowerCase() === marketAddr!.toLowerCase();
 
   // After a trade / fee claim, refresh the INDEXER-derived word detail (onChanged)
   // AND the live on-chain reads (price, market cap, the wallet's balance) right away
@@ -89,6 +107,9 @@ export function WordMarketPanel({
     const cs = candles1h.data ?? [];
     if (cs.length === 0) return null;
     const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
+    const inWindow = cs.filter((c) => c.t >= dayAgo);
+    // No trades in the window -> no chip. A "+0.0%" on a dead market implies life.
+    if (inWindow.length === 0) return null;
     const toNum = (wei: string) => {
       try {
         return Number(BigInt(wei));
@@ -98,12 +119,13 @@ export function WordMarketPanel({
     };
     const last = toNum(cs[cs.length - 1].c);
     const before = cs.filter((c) => c.t < dayAgo);
-    const inWindow = cs.filter((c) => c.t >= dayAgo);
     const base = before.length
       ? toNum(before[before.length - 1].c)
       : toNum(inWindow[0]?.o ?? cs[0].o);
     if (!(base > 0)) return null;
-    return ((last - base) / base) * 100;
+    const pct = ((last - base) / base) * 100;
+    // Kill the "-0.0%" rendering artifact for sub-0.05% moves.
+    return Math.abs(pct) < 0.05 ? 0 : pct;
   }, [candles1h.data]);
 
   // Flash the price green/red for ~1s whenever it ticks — the live "wow" beat.
@@ -199,9 +221,24 @@ export function WordMarketPanel({
             sell() open, so we keep the Sell tab usable and only freeze Buy. */}
         {!isConnected || wrongNetwork ? (
           <Card className="fade-up flex flex-col items-center gap-3 p-5 text-sm text-muted">
-            <span>Connect your wallet to trade {symbol ? `$${symbol}` : "this coin"}.</span>
+            <span>
+              {wrongNetwork
+                ? `Switch network to trade ${symbol ? `$${symbol}` : "this coin"}.`
+                : `Connect your wallet to trade ${symbol ? `$${symbol}` : "this coin"}.`}
+            </span>
             <WalletButton />
           </Card>
+        ) : !marketVerified ? (
+          // Registry check pending (skeleton) or FAILED (API said one market, the
+          // chain says another) — never show a buy box that pays the wrong address.
+          registryMarket === undefined ? (
+            <Skeleton className="h-[260px] w-full rounded-xl" />
+          ) : (
+            <Card className="p-5 text-center text-sm text-warning">
+              This market didn’t match the on-chain registry. Trading is disabled here —
+              try reloading.
+            </Card>
+          )
         ) : (
           <WhitelistGate>
             <TradeBox
@@ -230,8 +267,8 @@ export function WordMarketPanel({
           </Card>
         )}
 
-        {/* Deed-holder fees (cash-flow hook) */}
-        {isDeedOwner && (
+        {/* Deed-holder fees (cash-flow hook) — same registry gate as the TradeBox. */}
+        {isDeedOwner && marketVerified && (
           <DeedFees market={marketAddr} word={word} feesWei={deedFeesWei} onClaimed={handleChanged} />
         )}
 

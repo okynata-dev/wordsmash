@@ -81,7 +81,8 @@ export function Top() {
         <Mini label="Words" value={stats?.wordsClaimed} error={statsError} onRetry={() => void refetchStats()} />
         <Mini label="Owners" value={stats?.uniqueOwners} error={statsError} onRetry={() => void refetchStats()} />
         <Mini label="Sales" value={stats?.sales} error={statsError} onRetry={() => void refetchStats()} />
-        <Mini label="Volume" suffix={stats ? ethLabel(stats.totalVolumeWei) : undefined} />
+        {/* Deed-SALE volume — distinct from the token-trading volume in the table below. */}
+        <Mini label="Deed volume" suffix={stats ? ethLabel(stats.totalVolumeWei) : undefined} />
       </div>
 
       {/* Most traded coins (v2 token markets) */}

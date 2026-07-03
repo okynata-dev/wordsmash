@@ -556,10 +556,10 @@ export async function postComment(
   const timestamp = Number(body.timestamp);
   const message = commentMessage(address, word, text, timestamp);
   await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
-  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
-  // Rate limit: signatures are free to mint, so the replay guard alone doesn't
-  // bound spam. Cap comments per author per 10-minute window.
+  // Rate limit BEFORE consuming the signature: a 429 must not burn the sig and
+  // force a re-sign on retry. Signatures are free to mint, so the replay guard
+  // alone doesn't bound spam — cap comments per author per 10-minute window.
   const COMMENT_RATE_LIMIT = 20;
   const recent = await db
     .prepare("SELECT COUNT(*) AS n FROM comments WHERE author = ? AND ts > ?")
@@ -568,6 +568,8 @@ export async function postComment(
   if ((recent?.n ?? 0) >= COMMENT_RATE_LIMIT) {
     throw new HttpError(429, "too many comments — slow down");
   }
+
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
 
   // Resolve the token id for this word (may be null if unclaimed).
   const wordRow = await db

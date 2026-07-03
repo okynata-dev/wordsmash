@@ -24,6 +24,7 @@ import { activeChain } from "../wagmi";
 import { asMarketAddress } from "../hooks/useMarket";
 import { useReceiptError } from "../hooks/useReceiptError";
 import { Button, Card, Pill, Spinner, ErrorState } from "../components/ui";
+import { WalletButton } from "../components/WalletButton";
 import { ShareButton } from "../components/ShareButton";
 import { WhitelistGate } from "../components/WhitelistGate";
 import { WatchButton } from "../components/WatchButton";
@@ -59,6 +60,9 @@ export function Word() {
   });
 
   const tokenId = wordToTokenId(word);
+  // A URL like /word/привет or /word/has!chars can never be claimed on-chain —
+  // don't show it as "unclaimed" with a Claim link that dead-ends.
+  const invalidWord = !normalizeWord(word).ok && !detail?.owner;
   // Always display the canonical form, never the raw URL param (e.g. /word/BREAD -> "bread").
   const display = detail?.word || normalizeWord(word).normalized || word.toLowerCase();
   useDocumentTitle(display);
@@ -95,7 +99,11 @@ export function Word() {
             <h1 className="word-display text-5xl leading-none sm:text-6xl">{display}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {tokenId !== null && !isDemo && <WatchButton tokenId={tokenId.toString()} />}
+            {/* Watch only claimed words — the indexer joins watchlist rows against
+                `words`, so watching an unclaimed word "succeeds" but never shows up. */}
+            {tokenId !== null && !isDemo && Boolean(owner) && (
+              <WatchButton tokenId={tokenId.toString()} />
+            )}
             <ShareButton word={display} variant="ghost" />
           </div>
         </div>
@@ -107,6 +115,8 @@ export function Word() {
               <span className="text-xs text-faint">deed holder</span>
               <UserBadge address={owner} size={22} />
             </span>
+          ) : invalidWord ? (
+            <Pill tone="warning">not a valid word</Pill>
           ) : isError ? (
             <Pill tone="warning">status unavailable</Pill>
           ) : (
@@ -115,13 +125,21 @@ export function Word() {
         </div>
       </Card>
 
-      {isError && !detail ? (
+      {/* Invalid words get the explanation card below, not a futile Retry. */}
+      {isError && !detail && !invalidWord ? (
         <div className="mt-5">
           <ErrorState message="Couldn’t load this word." onRetry={() => void refetch()} />
         </div>
       ) : null}
 
-      {!owner && !isLoading && !isError && (
+      {invalidWord && !isLoading && (
+        <Card className="mt-5 p-5 text-center text-sm text-muted">
+          “{display}” can’t be kept — words are 1–30 characters, letters a–z and digits only.
+        </Card>
+      )}
+
+
+      {!owner && !invalidWord && !isLoading && !isError && (
         <Card className="mt-5 p-5 text-center text-sm text-muted">
           No one owns “{display}” yet.{" "}
           <Link to={`/?claim=${encodeURIComponent(word)}`} className="text-fg underline">
@@ -170,6 +188,15 @@ export function Word() {
                     </Card>
                   )}
                 </WhitelistGate>
+              )}
+              {/* Active listing but no usable wallet: a way in, not a dead end. */}
+              {listing?.active && (!isConnected || wrongNetwork) && (
+                <Card className="flex flex-col items-center gap-3 p-5 text-sm text-muted">
+                  <span>
+                    {wrongNetwork ? "Switch network to buy it." : "Sign in to buy it."}
+                  </span>
+                  <WalletButton />
+                </Card>
               )}
               {listing?.active && (
                 <p className="flex flex-wrap items-center gap-1 text-sm text-muted">
@@ -364,6 +391,15 @@ function OwnerControls({
     query: { enabled: Boolean(marketAddr), refetchInterval: 30_000 },
   });
   const unclaimedWei = (accruedFees as bigint | undefined) ?? 0n;
+
+  // The marketplace takes a cut of the sale price (FEE_BPS, live-read like the
+  // claim fee) — the seller must see their NET proceeds before listing.
+  const { data: saleFeeBps } = useReadContract({
+    address: marketplaceAddress,
+    abi: deedMarketplaceAbi,
+    functionName: "FEE_BPS",
+  });
+  const feeBps = (saleFeeBps as bigint | undefined) ?? null;
 
   // Is the marketplace approved to move THIS one token? We deliberately use per-token
   // approval (approve(tokenId)) rather than setApprovalForAll: listing one word must
@@ -560,6 +596,16 @@ function OwnerControls({
         </Button>
       </div>
       {priceInvalid && <p className="text-xs text-negative">Enter a positive ETH amount.</p>}
+      {feeBps !== null && parsedPrice !== null && parsedPrice > 0n && !priceInvalid && (
+        <p className="text-xs text-muted">
+          Marketplace fee {(Number(feeBps) / 100).toFixed(0)}% — if it sells at this price,
+          you&rsquo;ll receive{" "}
+          <span className="font-medium text-fg">
+            {ethLabel((parsedPrice * (10_000n - feeBps)) / 10_000n)}
+          </span>
+          .
+        </p>
+      )}
       {unclaimedWei > 0n && (
         <p className="text-xs text-warning">
           You have {ethLabel(unclaimedWei)} of unclaimed trade fees. Claim them (in the
