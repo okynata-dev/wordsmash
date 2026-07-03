@@ -322,7 +322,9 @@ function BuyControl({
         address: marketplaceAddress,
         abi: deedMarketplaceAbi,
         functionName: "buy",
-        args: [tokenId],
+        // expectedPrice: the contract now re-checks the price WE saw — a seller
+        // repricing after this read makes the tx revert instead of clearing.
+        args: [tokenId, livePrice],
         value: livePrice,
         chainId: activeChain.id,
       },

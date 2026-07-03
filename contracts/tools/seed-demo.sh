@@ -63,8 +63,9 @@ CLAIM_FEE_WEI=$(call "$REGISTRY" "claimFee()(uint256)" | awk '{print $1}')
 echo "Claim fee: $(cast from-wei "$CLAIM_FEE_WEI") ETH (read from chain)"
 
 # --- PREFLIGHT: balance check ---
+# Overridable: re-runs with already-funded actors need almost nothing from the deployer.
 BAL_WEI=$(cast balance "$DEPLOYER_ADDR" --rpc-url "$RPC")
-NEED_WEI=$(cast to-wei 0.045 ether)
+NEED_WEI=$(cast to-wei "${MIN_DEPLOYER_ETH:-0.045}" ether)
 echo "Deployer:  $DEPLOYER_ADDR"
 echo "Balance:   $(cast from-wei "$BAL_WEI") ETH"
 if [[ $(cast --to-dec "$BAL_WEI" 2>/dev/null || echo "$BAL_WEI") -lt $(cast --to-dec "$NEED_WEI" 2>/dev/null || echo "$NEED_WEI") ]]; then

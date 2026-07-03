@@ -240,15 +240,16 @@ export function WordMarketPanel({
             </Card>
           )
         ) : (
-          <WhitelistGate>
-            <TradeBox
-              market={marketAddr}
-              symbol={symbol}
-              word={word}
-              buyFrozen={graduated}
-              onTraded={handleChanged}
-            />
-          </WhitelistGate>
+          // No WhitelistGate around the whole box: sell() is permissionless on-chain
+          // (the exit must never depend on the allowlist), so the Sell tab renders for
+          // everyone; the gate is applied to the BUY side inside TradeBox.
+          <TradeBox
+            market={marketAddr}
+            symbol={symbol}
+            word={word}
+            buyFrozen={graduated}
+            onTraded={handleChanged}
+          />
         )}
 
         {/* Your position */}

@@ -98,11 +98,13 @@ Sources for the above incidents/classes are listed at the bottom.
   construction (state this as a feature).
 - "One word, one owner" deed + Merkle beta = native identity / sybil tooling most launchpads lack.
 
-## Internal audit findings — MUST fix before mainnet (2026-07-02 pass)
+## Internal audit findings — ALL FIXED (2026-07-03 redeploy)
 
-Contract-level findings from the full internal audit (frontend items were fixed the same day;
-these need a redeploy, so they are queued for the mainnet contracts, not patched on the live
-testnet):
+Every contract-level finding below is **fixed, tested (83 forge tests incl. fuzz/invariants)
+and deployed to Base Sepolia** (registry `0x7739AEEDaE03118c53CD34e3C084c6cbBf847b87`,
+marketplace `0xBC48b7Ddf8837179974A776785b045452C5187B0`). See MAINNET.md for the launch
+runbook and the remaining HUMAN gate (external audit, multisig). Original findings kept for
+the audit trail:
 
 1. **H: whitelist gates `sell()`** (`WordMarket.sol` sell → `registry.isAllowed`). The owner
    can freeze every holder's ETH exit by revoking whitelist / re-enabling the global gate.

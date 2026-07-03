@@ -63,8 +63,9 @@ contract Handler is Base {
         uint256 id = registry.tokenIdOf(WORDS[w % 6]);
         if (id == 0) return;
         pay = bound(pay, 0, 100 ether);
+        (, uint256 price,) = market.listings(id);
         vm.prank(who);
-        try market.buy{value: pay}(id) {} catch {}
+        try market.buy{value: pay}(id, price) {} catch {}
     }
 
     function cancel(uint256 a, uint256 w) public {

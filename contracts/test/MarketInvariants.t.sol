@@ -26,6 +26,10 @@ contract MarketHandler is Base {
         return m;
     }
 
+    function actorAt(uint256 i) external view returns (address) {
+        return actors[i];
+    }
+
     function buy(uint256 a, uint256 value) external {
         address who = actors[a % 4];
         value = bound(value, 0, 50 ether);
@@ -42,9 +46,10 @@ contract MarketHandler is Base {
         try m.sell(amt, 0) {} catch {}
     }
 
-    function claimDeed() external {
-        address owner = registry.ownerOf(deedId);
-        vm.prank(owner);
+    function claimDeed(uint256 a) external {
+        // any actor may claim THEIR OWN pot (past holders included)
+        address who = actors[a % 4];
+        vm.prank(who);
         try m.claimFees() {} catch {}
     }
 
@@ -71,12 +76,15 @@ contract MarketInvariantsTest is Base {
         targetContract(address(handler));
     }
 
-    /// The market can ALWAYS cover its liabilities: balance >= curve reserve + every fee pot.
+    /// The market can ALWAYS cover its liabilities: balance >= curve reserve + every fee pot
+    /// (deed fees are per-owner now, so sum every actor's pot — the deed also moves between
+    /// actors via the handler's transferDeed, exercising the per-owner accounting).
     /// If this holds across all random trade orderings, no path lets anyone withdraw ETH the
     /// contract doesn't hold — i.e. no user can drain another's funds.
     function invariant_marketAlwaysSolvent() public view {
-        uint256 liabilities =
-            m.realEthReserve() + m.protocolFeesAccrued() + m.deedFeesAccrued() + m.liquidityFeesAccrued();
+        uint256 deedPots = m.deedFeesOf(handler.actorAt(0)) + m.deedFeesOf(handler.actorAt(1))
+            + m.deedFeesOf(handler.actorAt(2)) + m.deedFeesOf(handler.actorAt(3));
+        uint256 liabilities = m.realEthReserve() + m.protocolFeesAccrued() + deedPots;
         assertGe(address(m).balance, liabilities);
     }
 

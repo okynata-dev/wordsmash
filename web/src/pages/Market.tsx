@@ -186,7 +186,8 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
                       address: marketplaceAddress,
                       abi: deedMarketplaceAbi,
                       functionName: "buy",
-                      args: [tokenId],
+                      // expectedPrice re-checked on-chain — mid-flight reprice reverts.
+                      args: [tokenId, livePrice],
                       value: livePrice,
                       chainId: activeChain.id,
                     },

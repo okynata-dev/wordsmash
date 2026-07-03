@@ -4,6 +4,7 @@ import { useAccount, useBalance, useWaitForTransactionReceipt, useWriteContract 
 import { wordMarketAbi } from "../../contracts";
 import { activeChain } from "../../wagmi";
 import { useReceiptError } from "../../hooks/useReceiptError";
+import { WhitelistGate } from "../WhitelistGate";
 import { Button, Card, Spinner } from "../ui";
 import { useToast } from "../Toast";
 import { ethLabel, friendlyError, tokenLabel } from "../../lib/format";
@@ -83,13 +84,17 @@ export function TradeBox({
             frozen. You can still sell your {symbol ? `$${symbol}` : "tokens"}.
           </div>
         ) : (
-          <BuyPanel
-            market={market}
-            symbol={symbol}
-            word={word}
-            slippageBps={slippageBps}
-            onTraded={onTraded}
-          />
+          // Whitelist gates BUYS only — selling is permissionless on-chain and must
+          // stay reachable for any holder, allowlisted or not.
+          <WhitelistGate>
+            <BuyPanel
+              market={market}
+              symbol={symbol}
+              word={word}
+              slippageBps={slippageBps}
+              onTraded={onTraded}
+            />
+          </WhitelistGate>
         )
       ) : (
         <SellPanel

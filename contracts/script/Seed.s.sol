@@ -37,7 +37,9 @@ contract Seed is Script {
         (uint256 keepListed,) = registry.claim{value: fee}("wordsmash");
         (uint256 forSale,) = registry.claim{value: fee}("base");
         // List both; "base" will be bought below, "wordsmash" stays on the marketplace.
-        registry.setApprovalForAll(address(market), true);
+        // Per-token approvals: the marketplace no longer accepts operator approvals.
+        registry.approve(address(market), keepListed);
+        registry.approve(address(market), forSale);
         market.list(keepListed, 0.1 ether);
         market.list(forSale, 0.05 ether);
         vm.stopBroadcast();
@@ -48,7 +50,7 @@ contract Seed is Script {
         WordMarket genesisMarket = WordMarket(payable(registry.marketOf("genesis")));
         vm.startBroadcast(PK1);
         registry.verifyWhitelist(proof1);
-        market.buy{value: 0.05 ether}(forSale);
+        market.buy{value: 0.05 ether}(forSale, 0.05 ether);
         genesisMarket.buy{value: 0.5 ether}(0);
         uint256 half = genesisMarket.balanceOf(ACC1) / 2;
         genesisMarket.sell(half, 0);

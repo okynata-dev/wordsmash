@@ -210,18 +210,19 @@ export async function handleTrade(
       .run();
 
     // volume += ethAmount; last_price_wei = newPrice; approx real_eth_reserve from the trade.
-    // FEE_BPS matches the deployed curve config (1%). buy ethWei = msg.value -> ethIn = *(1-fee);
-    // sell ethWei = ethToSeller -> grossEthOut = /(1-fee). Approximate (rounding) but fine for
-    // ranking; the coin page reads the exact reserve on-chain.
-    const FEE_BPS = 100n;
+    // The Trade event emits GROSS on both legs (same basis as the contract's totalEthVolume,
+    // so indexed volume matches the on-chain aggregate exactly). Reserve approximation matches
+    // the deployed curve config (1% fee; the liquidity share — 10% of the fee — is folded into
+    // the reserve): buy Δ = +gross*(9900+10)/10000; sell Δ = -gross*(10000-10)/10000.
+    // Approximate (rounding) but fine for ranking; the coin page reads the exact reserve on-chain.
     const cur = await db
       .prepare("SELECT volume_wei, real_eth_reserve FROM markets WHERE market = ?")
       .bind(market)
       .first<{ volume_wei: string | null; real_eth_reserve: string | null }>();
     const newVol = (BigInt(cur?.volume_wei ?? "0") + ev.ethWei).toString();
     let reserve = BigInt(cur?.real_eth_reserve ?? "0");
-    if (ev.isBuy) reserve += (ev.ethWei * (10000n - FEE_BPS)) / 10000n;
-    else reserve -= (ev.ethWei * 10000n) / (10000n - FEE_BPS);
+    if (ev.isBuy) reserve += (ev.ethWei * 9910n) / 10000n;
+    else reserve -= (ev.ethWei * 9990n) / 10000n;
     if (reserve < 0n) reserve = 0n;
 
     // M-2: maintain the distinct-trader count incrementally. A returning trader is

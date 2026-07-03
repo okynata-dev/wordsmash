@@ -7,6 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 interface IWordRegistry {
     function isAllowed(address account) external view returns (bool);
+    function paused() external view returns (bool);
 }
 
 /// @title DeedMarketplace
@@ -50,15 +51,17 @@ contract DeedMarketplace is Ownable, ReentrancyGuard {
         protocolFeeReceiver = protocolFeeReceiver_;
     }
 
-    /// @notice List a deed you own. Requires marketplace approval and whitelist (during beta).
+    /// @notice List a deed you own. Requires a PER-TOKEN approval and whitelist (during beta).
+    /// @dev Per-token approval ONLY (no isApprovedForAll): ERC-721 clears getApproved on every
+    ///      transfer, so if the deed ever leaves the seller and comes back, the old listing is
+    ///      structurally un-executable until they approve + relist — stale listings cannot be
+    ///      resurrected at an outdated price via a lingering operator approval.
     function list(uint256 tokenId, uint256 price) external {
+        require(!registry.paused(), "PAUSED");
         require(registry.isAllowed(msg.sender), "NOT_WHITELISTED");
         require(price > 0, "ZERO_PRICE");
         require(deed.ownerOf(tokenId) == msg.sender, "NOT_OWNER");
-        require(
-            deed.getApproved(tokenId) == address(this) || deed.isApprovedForAll(msg.sender, address(this)),
-            "NOT_APPROVED"
-        );
+        require(deed.getApproved(tokenId) == address(this), "NOT_APPROVED");
         listings[tokenId] = Listing({seller: msg.sender, price: price, active: true});
         if (!_everListed[tokenId]) {
             _everListed[tokenId] = true;
@@ -76,10 +79,14 @@ contract DeedMarketplace is Ownable, ReentrancyGuard {
     }
 
     /// @notice Buy a listed deed. Credits seller/buyer/protocol (pull), then transfers the deed.
-    function buy(uint256 tokenId) external payable nonReentrant {
+    /// @param expectedPrice The price the buyer SAW. A seller repricing in front of a pending
+    ///        buy makes it revert instead of silently clearing at the new price.
+    function buy(uint256 tokenId, uint256 expectedPrice) external payable nonReentrant {
+        require(!registry.paused(), "PAUSED");
         require(registry.isAllowed(msg.sender), "NOT_WHITELISTED");
         Listing memory l = listings[tokenId];
         require(l.active, "NOT_LISTED");
+        require(l.price == expectedPrice, "PRICE_CHANGED");
         require(deed.ownerOf(tokenId) == l.seller, "SELLER_MOVED_DEED");
         require(msg.value >= l.price, "INSUFFICIENT_PAYMENT");
 
@@ -96,6 +103,16 @@ contract DeedMarketplace is Ownable, ReentrancyGuard {
         deed.safeTransferFrom(l.seller, msg.sender, tokenId);
 
         emit Sale(tokenId, l.seller, msg.sender, l.price, fee);
+    }
+
+    /// @notice Deactivate a listing whose deed left the seller (hygiene: anyone may call, so
+    ///         UIs and keepers can clear dead listings without waiting for the seller).
+    function reap(uint256 tokenId) external {
+        Listing storage l = listings[tokenId];
+        require(l.active, "NOT_LISTED");
+        require(deed.ownerOf(tokenId) != l.seller, "STILL_OWNER");
+        l.active = false;
+        emit Cancelled(tokenId, l.seller);
     }
 
     /// @notice Pull your credited balance (sale proceeds and/or refunds).

@@ -7,6 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 interface IDeedRegistry {
     function ownerOf(uint256 tokenId) external view returns (address);
     function isAllowed(address account) external view returns (bool);
+    function paused() external view returns (bool);
 }
 
 /// @title WordMarket (v2)
@@ -51,10 +52,15 @@ contract WordMarket is ERC20, ReentrancyGuard {
     uint16 public protocolBps;
     uint16 public deedBps;
     uint16 public liquidityBps;
-    uint256 public deedFeesAccrued; // claimable by the current deed owner
+    /// @notice Deed-owner fee share, accounted PER OWNER AT ACCRUAL TIME. Selling the deed
+    ///         no longer donates the unclaimed pot to the buyer: what you earned while you
+    ///         held the deed stays claimable by you, forever. (The liquidity share is folded
+    ///         straight into `realEthReserve` — it deepens the curve instead of stranding.)
+    mapping(address => uint256) public deedFeesOf;
     uint256 public protocolFeesAccrued;
-    uint256 public liquidityFeesAccrued; // retained in-contract
 
+    /// @notice Gross ETH volume: msg.value on buys + gross curve outflow on sells (same
+    ///         basis as the Trade event, so on-chain and indexed volume always agree).
     uint256 public totalEthVolume;
 
     event Trade(address indexed trader, bool isBuy, uint256 ethAmount, uint256 tokenAmount, uint256 newPrice);
@@ -113,8 +119,11 @@ contract WordMarket is ERC20, ReentrancyGuard {
     // ── trading ───────────────────────────────────────────────────────────────
 
     /// @notice Buy tokens with ETH. Fee taken from msg.value; remainder enters the curve.
+    /// @dev Pausable via the registry's emergency switch. Only ENTRIES pause — sell(),
+    ///      claimFees() and every withdrawal stay live so a pause can never trap funds.
     function buy(uint256 minTokensOut) external payable nonReentrant returns (uint256 tokensOut) {
         require(!graduated, "GRADUATED");
+        require(!registry.paused(), "PAUSED");
         require(registry.isAllowed(msg.sender), "NOT_WHITELISTED");
         require(msg.value > 0, "ZERO_ETH");
 
@@ -133,7 +142,7 @@ contract WordMarket is ERC20, ReentrancyGuard {
         virtualEthReserve = newEthReserve;
         virtualTokenReserve = newTokenReserve;
         realEthReserve += ethIn;
-        totalEthVolume += ethIn;
+        totalEthVolume += msg.value; // gross, matching the Trade event
         _splitFee(fee);
 
         _transfer(address(this), msg.sender, tokensOut);
@@ -150,8 +159,11 @@ contract WordMarket is ERC20, ReentrancyGuard {
     ///      freezes buys (curve growth) but never traps anyone's funds. This removes the
     ///      "stranded reserve" and "force-graduation griefing" risks that a full freeze would create
     ///      while DEX migration is still on the roadmap.
+    ///      DELIBERATELY UNGATED: no whitelist and no pause. The exit is permissionless by
+    ///      construction — no admin action, gate flip or emergency switch can ever freeze a
+    ///      holder's ability to sell. Tokens are plain ERC-20 and routinely reach wallets that
+    ///      never enrolled; their money must not depend on anyone's allowlist state.
     function sell(uint256 tokenAmount, uint256 minEthOut) external nonReentrant returns (uint256 ethToSeller) {
-        require(registry.isAllowed(msg.sender), "NOT_WHITELISTED");
         require(tokenAmount > 0, "ZERO_TOKENS");
         require(balanceOf(msg.sender) >= tokenAmount, "BALANCE");
 
@@ -177,7 +189,7 @@ contract WordMarket is ERC20, ReentrancyGuard {
         // interaction last
         (bool sent,) = msg.sender.call{value: ethToSeller}("");
         require(sent, "ETH_SEND_FAIL");
-        emit Trade(msg.sender, false, ethToSeller, tokenAmount, currentPrice());
+        emit Trade(msg.sender, false, grossEthOut, tokenAmount, currentPrice()); // gross, like buys
     }
 
     function _splitFee(uint256 fee) private {
@@ -186,22 +198,31 @@ contract WordMarket is ERC20, ReentrancyGuard {
         uint256 toDeed = (fee * deedBps) / BPS;
         uint256 toLiquidity = fee - toProtocol - toDeed; // remainder avoids dust loss
         protocolFeesAccrued += toProtocol;
-        deedFeesAccrued += toDeed;
-        liquidityFeesAccrued += toLiquidity;
+        // Credit the deed share to whoever holds the deed RIGHT NOW — selling the deed
+        // later moves only FUTURE fees to the buyer, never the already-earned pot.
+        deedFeesOf[registry.ownerOf(deedTokenId)] += toDeed;
+        // The liquidity share deepens the curve's real backing instead of stranding in a
+        // pot nothing can spend: it counts toward graduation and cushions seller exits.
+        realEthReserve += toLiquidity;
     }
 
     // ── fee withdrawal ─────────────────────────────────────────────────────────
 
-    /// @notice Current deed holder withdraws the accrued deed-owner fee share.
+    /// @notice Withdraw YOUR accrued deed-owner fee share. Callable by anyone with a
+    ///         balance (current holder, or a past holder who never claimed) — always live.
     function claimFees() external nonReentrant returns (uint256 amount) {
-        address owner = registry.ownerOf(deedTokenId);
-        require(msg.sender == owner, "NOT_DEED_OWNER");
-        amount = deedFeesAccrued;
+        amount = deedFeesOf[msg.sender];
         require(amount > 0, "NOTHING");
-        deedFeesAccrued = 0;
-        (bool sent,) = owner.call{value: amount}("");
+        deedFeesOf[msg.sender] = 0;
+        (bool sent,) = msg.sender.call{value: amount}("");
         require(sent, "ETH_SEND_FAIL");
-        emit DeedFeesClaimed(owner, amount);
+        emit DeedFeesClaimed(msg.sender, amount);
+    }
+
+    /// @notice Back-compat convenience: the CURRENT deed holder's claimable pot (what the
+    ///         word page and profile earnings surfaces display).
+    function deedFeesAccrued() external view returns (uint256) {
+        return deedFeesOf[registry.ownerOf(deedTokenId)];
     }
 
     function claimProtocolFees() external nonReentrant returns (uint256 amount) {

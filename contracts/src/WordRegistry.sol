@@ -30,6 +30,13 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     bool public whitelistEnabled = true;
     mapping(address => bool) public isWhitelisted; // cached after enrollment via verifyWhitelist
 
+    // --- emergency switch ---
+    /// @notice Pauses ENTRIES only: claim() here, buy() on every market clone, and
+    ///         list()/buy() on the marketplace (all consult this flag). Exits are
+    ///         deliberately unpausable — sell(), claimFees() and every withdrawal keep
+    ///         working, so a pause can never trap user funds.
+    bool public paused;
+
     // --- anti-bot claim limit ---
     uint256 public maxClaimsPerAddress; // 0 = unlimited
     mapping(address => uint256) public claimsBy; // monotonic mint count, cannot be reset by transfer
@@ -56,6 +63,7 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     event MaxClaimsUpdated(uint256 max);
     event ProtocolFeeReceiverUpdated(address receiver);
     event FeesWithdrawn(address indexed to, uint256 amount);
+    event PausedUpdated(bool paused);
 
     constructor(
         address protocolFeeReceiver_,
@@ -113,6 +121,7 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
         nonReentrant
         returns (uint256 tokenId, address market)
     {
+        require(!paused, "PAUSED");
         require(isAllowed(msg.sender), "NOT_WHITELISTED");
 
         (string memory word, bool valid) = rawWord.normalize();
@@ -274,6 +283,13 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
     function setMaxClaimsPerAddress(uint256 max) external onlyOwner {
         maxClaimsPerAddress = max;
         emit MaxClaimsUpdated(max);
+    }
+
+    /// @notice Emergency switch for ENTRIES (claims, market buys, marketplace list/buy).
+    ///         Cannot pause exits — see the `paused` docs.
+    function setPaused(bool paused_) external onlyOwner {
+        paused = paused_;
+        emit PausedUpdated(paused_);
     }
 
     /// @notice Update the curve config used for FUTURE claims (existing markets keep their own).

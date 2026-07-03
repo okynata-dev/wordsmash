@@ -84,9 +84,14 @@ contract WordMarketTest is Base {
         vm.prank(bob);
         m.buy{value: 1 ether}(0);
         uint256 fee = (1 ether * 100) / 10_000;
-        assertApproxEqAbs(m.protocolFeesAccrued(), (fee * 5000) / 10_000, 1);
-        assertApproxEqAbs(m.deedFeesAccrued(), (fee * 4000) / 10_000, 1);
-        assertApproxEqAbs(m.liquidityFeesAccrued(), (fee * 1000) / 10_000, 2);
+        uint256 toProtocol = (fee * 5000) / 10_000;
+        uint256 toDeed = (fee * 4000) / 10_000;
+        uint256 toLiquidity = fee - toProtocol - toDeed;
+        assertEq(m.protocolFeesAccrued(), toProtocol);
+        assertEq(m.deedFeesAccrued(), toDeed);
+        // the liquidity share deepens the curve instead of stranding in a pot
+        assertEq(m.realEthReserve(), (1 ether - fee) + toLiquidity);
+        assertEq(m.totalEthVolume(), 1 ether); // gross basis
     }
 
     function test_DeedOwnerClaimsFees() public {
@@ -100,12 +105,15 @@ contract WordMarketTest is Base {
         assertEq(m.deedFeesAccrued(), 0);
     }
 
-    function test_NonDeedOwnerCannotClaim() public {
+    function test_NonEarnerHasNothingToClaim() public {
         vm.prank(bob);
         m.buy{value: 1 ether}(0);
+        // fees accrued to ALICE (deed holder); bob's own pot is empty and that is
+        // the only pot he can touch.
         vm.prank(bob);
-        vm.expectRevert(bytes("NOT_DEED_OWNER"));
+        vm.expectRevert(bytes("NOTHING"));
         m.claimFees();
+        assertGt(m.deedFeesOf(alice), 0);
     }
 
     function test_ProtocolClaims() public {
@@ -135,7 +143,7 @@ contract WordMarketTest is Base {
         assertGt(newFees, 0);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("NOT_DEED_OWNER"));
+        vm.expectRevert(bytes("NOTHING")); // alice already claimed hers; the new pot is carol's
         m.claimFees();
 
         uint256 before = carol.balance;
@@ -243,8 +251,8 @@ contract WordMarketTest is Base {
     /// i.e. no accounting path lets a user (or the deed/protocol) withdraw ETH the contract
     /// doesn't hold. This is the core "can't drain others' funds" guarantee.
     function _assertSolvent() internal view {
-        uint256 liabilities =
-            m.realEthReserve() + m.protocolFeesAccrued() + m.deedFeesAccrued() + m.liquidityFeesAccrued();
+        uint256 deedPots = m.deedFeesOf(alice) + m.deedFeesOf(bob) + m.deedFeesOf(carol) + m.deedFeesOf(dave);
+        uint256 liabilities = m.realEthReserve() + m.protocolFeesAccrued() + deedPots;
         assertGe(address(m).balance, liabilities, "insolvent");
     }
 
@@ -258,11 +266,77 @@ contract WordMarketTest is Base {
         // owner is not the protocol recipient -> can't even claim the protocol fee pot
         vm.expectRevert(bytes("NOT_PROTOCOL"));
         m.claimProtocolFees();
-        // owner doesn't hold the deed -> can't claim deed fees
-        vm.expectRevert(bytes("NOT_DEED_OWNER"));
+        // owner never earned deed fees -> nothing claimable
+        vm.expectRevert(bytes("NOTHING"));
         m.claimFees();
         // and there is simply no function to withdraw realEthReserve. It only leaves via sell().
         assertGt(m.realEthReserve(), 0);
+    }
+
+    // ── M-4 fix: unclaimed fees stay with whoever EARNED them ──────────────────────
+    function test_UnclaimedFeesSurviveDeedSale() public {
+        vm.prank(bob);
+        m.buy{value: 1 ether}(0);
+        uint256 aliceEarned = m.deedFeesOf(alice);
+        assertGt(aliceEarned, 0);
+
+        vm.prank(alice);
+        registry.transferFrom(alice, carol, deedId); // deed sold WITHOUT claiming first
+
+        // the current-holder view reads carol's (empty) pot -> buyer inherits nothing
+        assertEq(m.deedFeesAccrued(), 0);
+
+        // alice's earnings survived the transfer and only she can pull them
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        m.claimFees();
+        assertEq(alice.balance - before, aliceEarned);
+
+        // future fees accrue to carol
+        vm.prank(bob);
+        m.buy{value: 1 ether}(0);
+        assertGt(m.deedFeesOf(carol), 0);
+        assertEq(m.deedFeesOf(alice), 0);
+    }
+
+    // ── H-1 fix: the exit is permissionless — no gate can ever freeze a seller ─────
+    function test_SellIsPermissionless() public {
+        vm.prank(bob);
+        m.buy{value: 1 ether}(0);
+        uint256 bal = m.balanceOf(bob);
+        vm.prank(bob);
+        m.transfer(eve, bal); // plain ERC-20 transfer to a NEVER-whitelisted wallet
+        uint256 before = eve.balance;
+        vm.prank(eve);
+        m.sell(bal, 0); // whitelist ON and eve not on it -> still exits
+        assertGt(eve.balance, before);
+        _assertSolvent();
+    }
+
+    // ── M-5 fix: pause freezes entries, never exits ─────────────────────────────────
+    function test_PauseFreezesEntriesNotExits() public {
+        vm.prank(bob);
+        m.buy{value: 1 ether}(0);
+
+        registry.setPaused(true);
+
+        vm.prank(carol);
+        vm.expectRevert(bytes("PAUSED"));
+        m.buy{value: 1 ether}(0);
+        vm.expectRevert(bytes("PAUSED"));
+        registry.claim{value: 1 ether}("frozen");
+
+        // exits stay live while paused: sell + fee claims
+        uint256 bal = m.balanceOf(bob);
+        vm.prank(bob);
+        m.sell(bal, 0);
+        vm.prank(alice);
+        m.claimFees();
+
+        registry.setPaused(false);
+        vm.prank(carol);
+        m.buy{value: 0.1 ether}(0); // unpaused -> entries resume
+        _assertSolvent();
     }
 
     // ── SECURITY: reentrancy on sell is blocked ────────────────────────────────────
