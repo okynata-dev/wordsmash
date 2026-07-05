@@ -77,6 +77,27 @@ export interface PricePoint {
   priceWei: string;
 }
 
+/** One day of protocol activity for the Stats page. */
+export interface AnalyticsPoint {
+  day: string; // YYYY-MM-DD (UTC)
+  claims: number;
+  trades: number;
+  volumeWei: string; // gross token-trade ETH volume that day
+}
+
+/** Protocol-wide analytics: 30-day daily series + lifetime totals. */
+export interface Analytics {
+  daily: AnalyticsPoint[];
+  totals: {
+    words: number;
+    markets: number;
+    trades: number;
+    uniqueTraders: number;
+    tradeVolumeWei: string; // bonding-curve volume (gross)
+    deedVolumeWei: string; // deed-marketplace sale volume
+  };
+}
+
 /** A trader's net curve position candidate (from indexed trades; the client
     verifies real balances on-chain before display). */
 export interface HolderRow {

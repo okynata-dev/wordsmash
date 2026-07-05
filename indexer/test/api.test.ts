@@ -7,7 +7,7 @@ import {
   handleSale,
   handleTrade,
 } from "../src/handlers.js";
-import { getCheck, getStats, getWordDetail, getMarket, getWordCandles, getWordHolders, getProfilePositions } from "../src/api.js";
+import { getCheck, getStats, getWordDetail, getMarket, getWordCandles, getWordHolders, getProfilePositions, getAnalytics } from "../src/api.js";
 import { getProfile } from "../src/social.js";
 import type { Db } from "../src/db.js";
 
@@ -172,5 +172,26 @@ describe("holders + positions", () => {
     expect(positions.length).toBe(1); // candidate market even though net is zero (client verifies)
     expect(positions[0].word).toBe("tea");
     expect(positions[0].market).toBe(MKT2);
+  });
+});
+
+describe("analytics", () => {
+  it("returns daily series + lifetime totals", async () => {
+    const db = await freshDb();
+    await seed(db); // 3 words, 2 deed sales
+    const MKT3 = "0x00000000000000000000000000000000000000cc";
+    await handleTransfer(db, { from: A.zero, to: A.alice, tokenId: 21n }, { tx: "0xc0", logIndex: 0, ts: 100 });
+    await handleWordClaimed(db, { word: "cocoa", tokenId: 21n, owner: A.alice, market: MKT3 }, { tx: "0xc0", logIndex: 1, ts: 100 });
+    await handleTrade(db, { market: MKT3, trader: A.bob, isBuy: true, ethWei: 5n, tokenAmount: 10n, priceWei: 1n }, { tx: "0xc1", logIndex: 0, ts: 200 });
+
+    const a = await getAnalytics(db);
+    expect(a.totals.words).toBe(4); // 3 seeded + cocoa
+    expect(a.totals.trades).toBe(1);
+    expect(a.totals.uniqueTraders).toBe(1);
+    expect(a.totals.tradeVolumeWei).toBe("5");
+    expect(a.totals.deedVolumeWei).toBe("1500"); // from seed()
+    expect(a.daily.length).toBeGreaterThan(0);
+    expect(a.daily.reduce((s, d) => s + d.claims, 0)).toBe(4);
+    expect(a.daily.reduce((s, d) => s + d.trades, 0)).toBe(1);
   });
 });

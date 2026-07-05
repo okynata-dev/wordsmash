@@ -44,10 +44,13 @@ export function ActivityFeed({
   limit,
   compact = false,
   live = false,
+  types,
 }: {
   limit?: number;
   compact?: boolean;
   live?: boolean;
+  /** Client-side type filter (e.g. ["buy","sell"]); omit for everything. */
+  types?: string[];
 }) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["activity"],
@@ -99,10 +102,15 @@ export function ActivityFeed({
     return <ErrorState message="Couldn’t load activity." onRetry={() => void refetch()} />;
   }
 
-  const rows = (Array.isArray(data) ? data : []).slice(0, limit);
+  const all = Array.isArray(data) ? data : [];
+  const rows = (types ? all.filter((a) => types.includes(a.type)) : all).slice(0, limit);
 
   if (rows.length === 0) {
-    return <Card className="p-5 text-sm text-muted">No activity yet.</Card>;
+    return (
+      <Card className="p-5 text-sm text-muted">
+        {types ? "Nothing in this category yet." : "No activity yet."}
+      </Card>
+    );
   }
 
   return (

@@ -20,6 +20,7 @@ import type {
   Candle,
   HolderRow,
   PositionRow,
+  Analytics,
 } from "@shared/types";
 import type { Comment } from "@shared/social";
 import {
@@ -142,6 +143,9 @@ export const api = {
   /** GET /profile/:address/positions -> markets ever traded (candidates for balances). */
   positions: (address: string) =>
     getList<PositionRow>(`/profile/${normAddr(address)}/positions`),
+
+  /** GET /analytics -> 30-day daily series + lifetime totals (Stats page). */
+  analytics: () => get<Analytics>(`/analytics`),
 
   /** GET /profile/:address -> meta + owned words, listings, activity, stats. */
   profile: async (address: string): Promise<Profile> => {

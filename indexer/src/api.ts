@@ -15,6 +15,8 @@ import type {
   Candle,
   HolderRow,
   PositionRow,
+  AnalyticsPoint,
+  Analytics,
   Stats,
   CheckResult,
   Paginated,
@@ -578,6 +580,80 @@ export async function getProfilePositions(db: Db, addressLower: string): Promise
     tokenSymbol: r.token_symbol ?? null,
     lastPriceWei: r.last_price_wei ?? "0",
   }));
+}
+
+// GET /analytics -> 30-day daily activity + lifetime totals for the Stats page.
+const ANALYTICS_DAYS = 30;
+export async function getAnalytics(db: Db): Promise<Analytics> {
+  // Daily claims straight from SQL (words is small); trades aggregated in JS so
+  // the wei sums stay BigInt-exact (never SUM() strings in SQLite).
+  const { results: claimRows } = await db
+    .prepare(
+      `SELECT date(claimed_at,'unixepoch') AS d, COUNT(*) AS n
+       FROM words GROUP BY d ORDER BY d DESC LIMIT ?`,
+    )
+    .bind(ANALYTICS_DAYS)
+    .all<{ d: string; n: number }>();
+
+  const { results: tradeRows } = await db
+    .prepare(`SELECT ts, eth_wei FROM trades ORDER BY ts DESC, id DESC LIMIT 5000`)
+    .all<{ ts: number; eth_wei: string }>();
+
+  const days = new Map<string, AnalyticsPoint>();
+  const dayOf = (unix: number) => new Date(unix * 1000).toISOString().slice(0, 10);
+  for (const r of claimRows) {
+    days.set(r.d, { day: r.d, claims: Number(r.n), trades: 0, volumeWei: "0" });
+  }
+  const vol = new Map<string, bigint>();
+  for (const t of tradeRows) {
+    const d = dayOf(Number(t.ts ?? 0));
+    const p = days.get(d) ?? { day: d, claims: 0, trades: 0, volumeWei: "0" };
+    p.trades += 1;
+    days.set(d, p);
+    let wei = 0n;
+    try {
+      wei = BigInt(t.eth_wei ?? "0");
+    } catch {
+      /* garbage row -> 0 */
+    }
+    vol.set(d, (vol.get(d) ?? 0n) + wei);
+  }
+  for (const [d, v] of vol) {
+    const p = days.get(d);
+    if (p) p.volumeWei = v.toString();
+  }
+  const daily = [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1)).slice(-ANALYTICS_DAYS);
+
+  const words = await db.prepare("SELECT COUNT(*) AS n FROM words").first<{ n: number }>();
+  const markets = await db.prepare("SELECT COUNT(*) AS n FROM markets").first<{ n: number }>();
+  const trades = await db.prepare("SELECT COUNT(*) AS n FROM trades").first<{ n: number }>();
+  const traders = await db
+    .prepare("SELECT COUNT(DISTINCT trader) AS n FROM trades")
+    .first<{ n: number }>();
+  const { results: mVols } = await db
+    .prepare("SELECT volume_wei FROM markets")
+    .all<{ volume_wei: string | null }>();
+  let tradeVolume = 0n;
+  for (const m of mVols) {
+    try {
+      tradeVolume += BigInt(m.volume_wei ?? "0");
+    } catch {
+      /* skip */
+    }
+  }
+  const stats = await getStats(db); // deed-sale volume lives in stats_agg
+
+  return {
+    daily,
+    totals: {
+      words: Number(words?.n ?? 0),
+      markets: Number(markets?.n ?? 0),
+      trades: Number(trades?.n ?? 0),
+      uniqueTraders: Number(traders?.n ?? 0),
+      tradeVolumeWei: tradeVolume.toString(),
+      deedVolumeWei: stats.totalVolumeWei,
+    },
+  };
 }
 
 // GET /profile/:address lives in social.ts (it now joins the off-chain profiles row).

@@ -56,6 +56,13 @@ function ActivityIcon({ className = "" }: IconProps) {
     </svg>
   );
 }
+function StatsIcon({ className = "" }: IconProps) {
+  return (
+    <svg {...stroke} className={`${ICON} ${className}`}>
+      <path d="M4 20V10M10 20V4M16 20v-6M21 20H3" />
+    </svg>
+  );
+}
 function WatchIcon({ className = "" }: IconProps) {
   return (
     <svg {...stroke} className={`${ICON} ${className}`}>
@@ -193,6 +200,7 @@ const navItems = [
   { to: "/market", label: "Market", Icon: MarketIcon },
   { to: "/top", label: "Top", Icon: TopIcon },
   { to: "/activity", label: "Activity", Icon: ActivityIcon },
+  { to: "/stats", label: "Stats", Icon: StatsIcon },
   { to: "/watchlist", label: "Watchlist", Icon: WatchIcon },
 ];
 

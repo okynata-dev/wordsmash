@@ -10,6 +10,7 @@ import {
   getWordCandles,
   getWordHolders,
   getProfilePositions,
+  getAnalytics,
   getCheck,
   getStats,
   getMarket,
@@ -328,6 +329,13 @@ export default {
       if (path === "/stats") {
         return json(await getStats(db), {
           headers: { "Cache-Control": "public, max-age=10" },
+        });
+      }
+
+      // /analytics — 30-day daily series + lifetime totals (Stats page)
+      if (path === "/analytics") {
+        return json(await getAnalytics(db), {
+          headers: { "Cache-Control": "public, max-age=60" },
         });
       }
 
