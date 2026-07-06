@@ -149,12 +149,13 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 CREATE TABLE IF NOT EXISTS comments (
-  id       INTEGER PRIMARY KEY AUTOINCREMENT,
-  token_id TEXT,
-  word     TEXT,
-  author   TEXT,
-  body     TEXT,
-  ts       INTEGER
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_id  TEXT,
+  word      TEXT,
+  author    TEXT,
+  body      TEXT,
+  ts        INTEGER,
+  parent_id INTEGER   -- NULL = top-level; else the comment it replies to
 );
 
 CREATE TABLE IF NOT EXISTS watchlist (
@@ -163,6 +164,23 @@ CREATE TABLE IF NOT EXISTS watchlist (
   ts       INTEGER,
   PRIMARY KEY (address, token_id)
 );
+
+-- Off-chain referral attribution (set-once per referred address).
+CREATE TABLE IF NOT EXISTS referrals (
+  address  TEXT PRIMARY KEY,   -- the referred wallet
+  referrer TEXT NOT NULL,      -- who invited them
+  ts       INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer);
+
+-- Comment likes (one row per (comment, liker)); replies use comments.parent_id.
+CREATE TABLE IF NOT EXISTS comment_likes (
+  comment_id INTEGER,
+  liker      TEXT,
+  ts         INTEGER,
+  PRIMARY KEY (comment_id, liker)
+);
+CREATE INDEX IF NOT EXISTS idx_comment_likes_cid ON comment_likes(comment_id);
 
 CREATE INDEX IF NOT EXISTS idx_words_owner    ON words(owner);
 CREATE INDEX IF NOT EXISTS idx_words_volume   ON words(volume_wei);

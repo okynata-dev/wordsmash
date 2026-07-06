@@ -291,3 +291,102 @@ describe("avatar (local-dev fallback)", () => {
     expect(p.meta.avatarUrl).toBe(dataUrl);
   });
 });
+
+// ── referrals ────────────────────────────────────────────────────────────────
+import { setReferrer, getReferrals, toggleCommentLike } from "../src/social.js";
+import { referralMessage, commentLikeMessage } from "../../shared/src/social.js";
+import { handleTransfer } from "../src/handlers.js";
+
+describe("referrals", () => {
+  async function makeOwner(db: Awaited<ReturnType<typeof freshDb>>, addr: string, word: string, tokenId: bigint) {
+    await handleTransfer(db, { from: A.zero, to: addr, tokenId }, { tx: "0x" + word, logIndex: 0, ts: 10 });
+    await handleWordClaimed(db, { word, tokenId, owner: addr }, { tx: "0x" + word, logIndex: 1, ts: 10 });
+  }
+
+  it("records a referrer once; blocks self and non-users; dashboard aggregates", async () => {
+    const db = await freshDb();
+    await makeOwner(db, ADDR1, "acct", 1n); // referrer must own a word
+
+    const ts = Date.now();
+    const msg = referralMessage(ADDR2, ADDR1, ts);
+    const res = await setReferrer(db, ADDR2, { referrer: ADDR1, timestamp: ts, signature: await sign(acct2, msg) });
+    expect(res.referrer.toLowerCase()).toBe(ADDR1);
+
+    // set-once
+    const ts2 = Date.now() + 1;
+    await expect(
+      setReferrer(db, ADDR2, { referrer: ADDR1, timestamp: ts2, signature: await sign(acct2, referralMessage(ADDR2, ADDR1, ts2)) }),
+    ).rejects.toMatchObject({ status: 409 });
+
+    // cannot refer yourself
+    const ts3 = Date.now() + 2;
+    await expect(
+      setReferrer(db, ADDR1, { referrer: ADDR1, timestamp: ts3, signature: await sign(acct1, referralMessage(ADDR1, ADDR1, ts3)) }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    const dash = await getReferrals(db, ADDR1);
+    expect(dash.totals.count).toBe(1);
+    expect(dash.invited[0].address.toLowerCase()).toBe(ADDR2);
+    const mine = await getReferrals(db, ADDR2);
+    expect(mine.referrer?.toLowerCase()).toBe(ADDR1);
+  });
+
+  it("rejects a referrer who isn't a keepney user", async () => {
+    const db = await freshDb();
+    const ts = Date.now();
+    await expect(
+      setReferrer(db, ADDR2, { referrer: ADDR1, timestamp: ts, signature: await sign(acct2, referralMessage(ADDR2, ADDR1, ts)) }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+// ── comment likes + replies ──────────────────────────────────────────────────
+describe("comment likes + replies", () => {
+  it("likes/unlikes with a count, and threads one level of replies", async () => {
+    const db = await freshDb();
+    const ts0 = Date.now();
+    const c1 = await postComment(db, ADDR1, "bread", {
+      body: "top", timestamp: ts0, signature: await sign(acct1, commentMessage(ADDR1, "bread", "top", ts0)),
+    });
+
+    // acct2 likes it
+    const lt = Date.now() + 1;
+    const like = await toggleCommentLike(db, ADDR2, c1.id, {
+      on: true, timestamp: lt, signature: await sign(acct2, commentLikeMessage(ADDR2, String(c1.id), true, lt)),
+    });
+    expect(like).toEqual({ likes: 1, liked: true });
+
+    // acct2 replies
+    const rt = Date.now() + 2;
+    await postComment(db, ADDR2, "bread", {
+      body: "a reply", parentId: c1.id, timestamp: rt, signature: await sign(acct2, commentMessage(ADDR2, "bread", "a reply", rt)),
+    });
+
+    // list from acct2's viewpoint: top-level shows like + likedByMe + the reply
+    const page = await listComments(db, "bread", null, ADDR2);
+    expect(page.items.length).toBe(1); // only the top-level
+    expect(page.items[0].likes).toBe(1);
+    expect(page.items[0].likedByMe).toBe(true);
+    expect(page.items[0].replies?.length).toBe(1);
+    expect(page.items[0].replies?.[0].body).toBe("a reply");
+
+    // unlike
+    const ut = Date.now() + 3;
+    const un = await toggleCommentLike(db, ADDR2, c1.id, {
+      on: false, timestamp: ut, signature: await sign(acct2, commentLikeMessage(ADDR2, String(c1.id), false, ut)),
+    });
+    expect(un.likes).toBe(0);
+  });
+
+  it("rejects a reply deeper than one level", async () => {
+    const db = await freshDb();
+    const t0 = Date.now();
+    const c1 = await postComment(db, ADDR1, "bread", { body: "top", timestamp: t0, signature: await sign(acct1, commentMessage(ADDR1, "bread", "top", t0)) });
+    const t1 = Date.now() + 1;
+    const r1 = await postComment(db, ADDR2, "bread", { body: "reply", parentId: c1.id, timestamp: t1, signature: await sign(acct2, commentMessage(ADDR2, "bread", "reply", t1)) });
+    const t2 = Date.now() + 2;
+    await expect(
+      postComment(db, ADDR1, "bread", { body: "nested", parentId: r1.id, timestamp: t2, signature: await sign(acct1, commentMessage(ADDR1, "bread", "nested", t2)) }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});

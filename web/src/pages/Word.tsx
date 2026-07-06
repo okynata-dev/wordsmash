@@ -11,6 +11,7 @@ import {
 import { readContract } from "wagmi/actions";
 import { useQuery } from "@tanstack/react-query";
 import { normalizeWord } from "@shared/normalize";
+import { collectionsForWord } from "@shared/collections";
 import { api } from "../api";
 import {
   marketplaceAddress,
@@ -63,6 +64,7 @@ export function Word() {
   // A URL like /word/привет or /word/has!chars can never be claimed on-chain —
   // don't show it as "unclaimed" with a Claim link that dead-ends.
   const invalidWord = !normalizeWord(word).ok && !detail?.owner;
+  const wordCollections = collectionsForWord(detail?.word || normalizeWord(word).normalized || "");
   // Always display the canonical form, never the raw URL param (e.g. /word/BREAD -> "bread").
   const display = detail?.word || normalizeWord(word).normalized || word.toLowerCase();
   useDocumentTitle(display);
@@ -97,6 +99,20 @@ export function Word() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="word-display text-5xl leading-none sm:text-6xl">{display}</h1>
+            {wordCollections.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {wordCollections.map((c) => (
+                  <Link
+                    key={c.key}
+                    to={`/collections/${c.key}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted transition hover:text-fg"
+                  >
+                    <span>{c.emoji}</span>
+                    {c.title}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {/* Watch only claimed words — the indexer joins watchlist rows against

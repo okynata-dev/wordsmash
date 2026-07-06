@@ -20,6 +20,8 @@ import {
   sha256Hex,
   commentMessage,
   watchlistMessage,
+  referralMessage,
+  commentLikeMessage,
   generatedAvatar,
   type ProfileMeta,
   type Comment,
@@ -485,6 +487,9 @@ function rowToComment(r: {
   ts: number;
   username: string | null;
   avatar_url: string | null;
+  parent_id?: number | null;
+  likes?: number;
+  liked?: number;
 }): Comment {
   const c: Comment = {
     id: Number(r.id),
@@ -493,6 +498,9 @@ function rowToComment(r: {
     author: checksum(r.author),
     body: r.body,
     ts: Number(r.ts),
+    parentId: r.parent_id ?? null,
+    likes: Number(r.likes ?? 0),
+    likedByMe: Boolean(r.liked),
   };
   if (r.username != null || r.avatar_url != null) {
     c.authorMeta = { username: r.username, avatarUrl: r.avatar_url };
@@ -500,43 +508,76 @@ function rowToComment(r: {
   return c;
 }
 
-// GET /word/:word/comments?cursor= -> Paginated<Comment> newest first.
+// GET /word/:word/comments?cursor=&viewer= -> Paginated<Comment> newest first.
+// Top-level comments carry like counts (+ likedByMe for the viewer) and one level
+// of replies attached under `replies` (oldest-first, so a thread reads top-down).
 export async function listComments(
   db: Db,
   rawWord: string,
   cursor: string | null,
+  viewerLower: string | null = null,
 ): Promise<Paginated<Comment>> {
   const word = normalizeWordParam(rawWord);
   const offset = cursor ? Math.min(Math.max(0, parseInt(cursor, 10) || 0), 100000) : 0;
+  const viewer = viewerLower ?? "";
+
+  const cols = `c.id, c.token_id, c.word, c.author, c.body, c.ts, c.parent_id AS parent_id,
+                p.username AS username, p.avatar_url AS avatar_url,
+                (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
+                (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id = c.id AND l.liker = ?) AS liked`;
 
   const { results } = await db
     .prepare(
-      `SELECT c.id, c.token_id, c.word, c.author, c.body, c.ts,
-              p.username AS username, p.avatar_url AS avatar_url
-       FROM comments c
-       LEFT JOIN profiles p ON p.address = c.author
-       WHERE c.word = ?
+      `SELECT ${cols}
+       FROM comments c LEFT JOIN profiles p ON p.address = c.author
+       WHERE c.word = ? AND c.parent_id IS NULL
        ORDER BY c.ts DESC, c.id DESC
        LIMIT ? OFFSET ?`,
     )
-    .bind(word, COMMENTS_PAGE + 1, offset)
-    .all<{
-      id: number;
-      token_id: string | null;
-      word: string;
-      author: string;
-      body: string;
-      ts: number;
-      username: string | null;
-      avatar_url: string | null;
-    }>();
+    .bind(viewer, word, COMMENTS_PAGE + 1, offset)
+    .all<CommentDbRow>();
 
   const hasMore = results.length > COMMENTS_PAGE;
-  const page = results.slice(0, COMMENTS_PAGE);
-  return {
-    items: page.map(rowToComment),
-    cursor: hasMore ? String(offset + COMMENTS_PAGE) : null,
-  };
+  const page = results.slice(0, COMMENTS_PAGE).map(rowToComment);
+
+  // Attach replies for this page's comments (one query, one level deep).
+  if (page.length > 0) {
+    const ids = page.map((c) => c.id);
+    const ph = ids.map(() => "?").join(",");
+    const { results: replies } = await db
+      .prepare(
+        `SELECT ${cols}
+         FROM comments c LEFT JOIN profiles p ON p.address = c.author
+         WHERE c.parent_id IN (${ph})
+         ORDER BY c.ts ASC, c.id ASC`,
+      )
+      .bind(viewer, ...ids)
+      .all<CommentDbRow>();
+    const byParent = new Map<number, Comment[]>();
+    for (const r of replies) {
+      const rc = rowToComment(r);
+      const arr = byParent.get(rc.parentId!) ?? [];
+      arr.push(rc);
+      byParent.set(rc.parentId!, arr);
+    }
+    for (const c of page) c.replies = byParent.get(c.id) ?? [];
+  }
+
+  return { items: page, cursor: hasMore ? String(offset + COMMENTS_PAGE) : null };
+}
+
+interface CommentDbRow {
+  id: number;
+  token_id: string | null;
+  word: string;
+  author: string;
+  body: string;
+  ts: number;
+  parent_id: number | null;
+  username: string | null;
+  avatar_url: string | null;
+  likes: number;
+  liked: number;
 }
 
 // POST /word/:word/comments — body {body,timestamp,signature}. Signer = author.
@@ -544,7 +585,7 @@ export async function postComment(
   db: Db,
   addressLower: string,
   rawWord: string,
-  body: { body?: string; timestamp?: number; signature?: `0x${string}` },
+  body: { body?: string; parentId?: number; timestamp?: number; signature?: `0x${string}` },
 ): Promise<Comment> {
   const address = addressLower;
   const word = normalizeWordParam(rawWord);
@@ -552,6 +593,19 @@ export async function postComment(
   const text = (body.body ?? "").trim();
   if (text === "") throw new HttpError(400, "empty comment");
   if (text.length > COMMENT_MAX) throw new HttpError(400, "comment too long");
+
+  // Replies point at an existing TOP-LEVEL comment on the same word (one level only).
+  let parentId: number | null = null;
+  if (body.parentId != null) {
+    const pid = Number(body.parentId);
+    const parent = await db
+      .prepare("SELECT id, parent_id FROM comments WHERE id = ? AND word = ?")
+      .bind(pid, word)
+      .first<{ id: number; parent_id: number | null }>();
+    if (!parent) throw new HttpError(400, "reply target not found");
+    if (parent.parent_id != null) throw new HttpError(400, "replies are one level deep");
+    parentId = pid;
+  }
 
   const timestamp = Number(body.timestamp);
   const message = commentMessage(address, word, text, timestamp);
@@ -581,32 +635,24 @@ export async function postComment(
 
   const ins = await db
     .prepare(
-      "INSERT INTO comments (token_id, word, author, body, ts) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO comments (token_id, word, author, body, ts, parent_id) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .bind(tokenId, word, address, text, ts)
+    .bind(tokenId, word, address, text, ts, parentId)
     .run();
 
   // Read back the row (with authorMeta) for the newest comment by this author.
   const row = await db
     .prepare(
-      `SELECT c.id, c.token_id, c.word, c.author, c.body, c.ts,
-              p.username AS username, p.avatar_url AS avatar_url
+      `SELECT c.id, c.token_id, c.word, c.author, c.body, c.ts, c.parent_id AS parent_id,
+              p.username AS username, p.avatar_url AS avatar_url,
+              0 AS likes, 0 AS liked
        FROM comments c
        LEFT JOIN profiles p ON p.address = c.author
        WHERE c.word = ? AND c.author = ? AND c.ts = ?
        ORDER BY c.id DESC LIMIT 1`,
     )
     .bind(word, address, ts)
-    .first<{
-      id: number;
-      token_id: string | null;
-      word: string;
-      author: string;
-      body: string;
-      ts: number;
-      username: string | null;
-      avatar_url: string | null;
-    }>();
+    .first<CommentDbRow>();
 
   if (row) return rowToComment(row);
   // Fallback (shouldn't happen): synthesize from what we inserted.
@@ -617,6 +663,9 @@ export async function postComment(
     author: checksum(address),
     body: text,
     ts,
+    parentId,
+    likes: 0,
+    likedByMe: false,
   };
 }
 
@@ -713,6 +762,135 @@ export async function getWatchlist(db: Db, addressLower: string): Promise<WordRo
 }
 
 // POST /watchlist/:address — body {tokenId,on,timestamp,signature}
+// POST /comment/:id/like — toggle a like on a comment (signed). Returns new count.
+export async function toggleCommentLike(
+  db: Db,
+  addressLower: string,
+  commentId: number,
+  body: { on?: boolean; timestamp?: number; signature?: `0x${string}` },
+): Promise<{ likes: number; liked: boolean }> {
+  if (!Number.isInteger(commentId) || commentId <= 0) throw new HttpError(400, "bad comment id");
+  const on = body.on !== false; // default true
+  const timestamp = Number(body.timestamp);
+  const message = commentLikeMessage(addressLower, String(commentId), on, timestamp);
+  await verifySigned(message, addressLower, body.signature as `0x${string}`, timestamp);
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
+
+  const exists = await db
+    .prepare("SELECT 1 AS x FROM comments WHERE id = ?")
+    .bind(commentId)
+    .first<{ x: number }>();
+  if (!exists) throw new HttpError(404, "comment not found");
+
+  if (on) {
+    await db
+      .prepare("INSERT OR IGNORE INTO comment_likes (comment_id, liker, ts) VALUES (?, ?, ?)")
+      .bind(commentId, addressLower, Date.now())
+      .run();
+  } else {
+    await db
+      .prepare("DELETE FROM comment_likes WHERE comment_id = ? AND liker = ?")
+      .bind(commentId, addressLower)
+      .run();
+  }
+  const n = await db
+    .prepare("SELECT COUNT(*) AS n FROM comment_likes WHERE comment_id = ?")
+    .bind(commentId)
+    .first<{ n: number }>();
+  return { likes: Number(n?.n ?? 0), liked: on };
+}
+
+// POST /referral — record who referred you. Set-once (first writer wins), can't
+// refer yourself, referrer must be a claimed-word owner (a real participant).
+export async function setReferrer(
+  db: Db,
+  addressLower: string,
+  body: { referrer?: string; timestamp?: number; signature?: `0x${string}` },
+): Promise<{ referrer: string }> {
+  const address = addressLower;
+  if (!isAddress(body.referrer ?? "")) throw new HttpError(400, "invalid referrer");
+  const referrer = (body.referrer as string).toLowerCase();
+  if (referrer === address) throw new HttpError(400, "cannot refer yourself");
+
+  const timestamp = Number(body.timestamp);
+  const message = referralMessage(address, referrer, timestamp);
+  await verifySigned(message, address, body.signature as `0x${string}`, timestamp);
+
+  const existing = await db
+    .prepare("SELECT referrer FROM referrals WHERE address = ?")
+    .bind(address)
+    .first<{ referrer: string }>();
+  if (existing) throw new HttpError(409, "referrer already set");
+
+  // The referrer must be a genuine participant (owns at least one word) — blocks
+  // spraying fake attributions from throwaway addresses.
+  const isParticipant = await db
+    .prepare("SELECT 1 AS x FROM words WHERE owner = ? LIMIT 1")
+    .bind(referrer)
+    .first<{ x: number }>();
+  if (!isParticipant) throw new HttpError(400, "referrer is not a keepney user");
+
+  await enforceFreshness(db, body.signature as `0x${string}`, timestamp);
+  await db
+    .prepare("INSERT OR IGNORE INTO referrals (address, referrer, ts) VALUES (?, ?, ?)")
+    .bind(address, referrer, Date.now())
+    .run();
+  return { referrer: checksum(referrer) };
+}
+
+// GET /referrals/:address — your referral dashboard: who you invited + their
+// on-chain footprint (words kept, trade volume they generated).
+export async function getReferrals(
+  db: Db,
+  addressLower: string,
+): Promise<{
+  referrer: string | null;
+  invited: Array<{ address: string; words: number; volumeWei: string; ts: number }>;
+  totals: { count: number; wordsKept: number; volumeWei: string };
+}> {
+  const mine = await db
+    .prepare("SELECT referrer FROM referrals WHERE address = ?")
+    .bind(addressLower)
+    .first<{ referrer: string }>();
+
+  const { results: invited } = await db
+    .prepare("SELECT address, ts FROM referrals WHERE referrer = ? ORDER BY ts DESC LIMIT 200")
+    .bind(addressLower)
+    .all<{ address: string; ts: number }>();
+
+  let wordsKept = 0;
+  let volume = 0n;
+  const rows = [];
+  for (const inv of invited) {
+    const w = await db
+      .prepare("SELECT COUNT(*) AS n FROM words WHERE owner = ?")
+      .bind(inv.address)
+      .first<{ n: number }>();
+    const { results: vols } = await db
+      .prepare("SELECT eth_wei FROM trades WHERE trader = ?")
+      .bind(inv.address)
+      .all<{ eth_wei: string }>();
+    let vwei = 0n;
+    for (const v of vols) {
+      try {
+        vwei += BigInt(v.eth_wei ?? "0");
+      } catch {
+        /* skip */
+      }
+    }
+    const words = Number(w?.n ?? 0);
+    wordsKept += words;
+    volume += vwei;
+    rows.push({ address: checksum(inv.address), words, volumeWei: vwei.toString(), ts: Number(inv.ts ?? 0) });
+  }
+
+  return {
+    referrer: mine ? checksum(mine.referrer) : null,
+    invited: rows,
+    totals: { count: rows.length, wordsKept, volumeWei: volume.toString() },
+  };
+}
+
 export async function toggleWatchlist(
   db: Db,
   addressLower: string,

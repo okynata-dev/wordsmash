@@ -5,6 +5,7 @@ import { useProfile } from "../hooks/useProfile";
 import { WordTile } from "../components/WordTile";
 import { EarningsCard } from "../components/EarningsCard";
 import { Positions } from "../components/Positions";
+import { ReferralCard } from "../components/ReferralCard";
 import { ShareButton } from "../components/ShareButton";
 import { Avatar } from "../components/Avatar";
 import { EditProfile } from "../components/EditProfile";
@@ -130,7 +131,10 @@ export function Profile() {
           )}
 
           {isSelf && connected && (
-            <EarningsCard address={connected} owned={data.owned} />
+            <>
+              <EarningsCard address={connected} owned={data.owned} />
+              <ReferralCard address={connected} />
+            </>
           )}
 
           <div className="mb-4 flex items-center gap-1 border-b border-border text-sm">

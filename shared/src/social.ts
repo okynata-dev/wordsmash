@@ -29,6 +29,10 @@ export interface Comment {
   authorMeta?: Pick<ProfileMeta, "username" | "avatarUrl">;
   body: string;
   ts: number;
+  parentId?: number | null; // reply target; null/absent = top-level
+  likes?: number;
+  likedByMe?: boolean;
+  replies?: Comment[]; // one level of threading, attached server-side
 }
 
 export interface SignedRequest {
@@ -127,6 +131,28 @@ export function commentMessage(address: string, word: string, body: string, time
     `address: ${address.toLowerCase()}`,
     `word: ${word}`,
     `body: ${JSON.stringify(body)}`,
+    `issued: ${timestamp}`,
+  ].join("\n");
+}
+
+/** Signed to like/unlike a comment. */
+export function commentLikeMessage(address: string, commentId: string, on: boolean, timestamp: number): string {
+  return [
+    "keepney: like comment",
+    `address: ${address.toLowerCase()}`,
+    `comment: ${commentId}`,
+    `on: ${on}`,
+    `issued: ${timestamp}`,
+  ].join("\n");
+}
+
+/** Signed once to record who referred you. Bound to both addresses so a
+    referrer can't be forged and the signer must be the referred wallet. */
+export function referralMessage(address: string, referrer: string, timestamp: number): string {
+  return [
+    "keepney: set referrer",
+    `address: ${address.toLowerCase()}`,
+    `referrer: ${referrer.toLowerCase()}`,
     `issued: ${timestamp}`,
   ].join("\n");
 }

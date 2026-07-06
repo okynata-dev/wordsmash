@@ -21,6 +21,7 @@ import type {
   HolderRow,
   PositionRow,
   Analytics,
+  NotificationRow,
 } from "@shared/types";
 import type { Comment } from "@shared/social";
 import {
@@ -147,6 +148,45 @@ export const api = {
   /** GET /analytics -> 30-day daily series + lifetime totals (Stats page). */
   analytics: () => get<Analytics>(`/analytics`),
 
+  /** GET /notifications/:address -> events touching your words/deeds. */
+  notifications: (address: string) =>
+    getList<NotificationRow>(`/notifications/${normAddr(address)}`),
+
+  /** GET /collections -> curated collections with claimed/total counts. */
+  collections: () =>
+    getList<{
+      key: string;
+      title: string;
+      emoji: string;
+      blurb: string;
+      total: number;
+      claimed: number;
+    }>(`/collections`),
+
+  /** GET /collection/:key -> claimed words in a collection (market-enriched). */
+  collection: (key: string) => getList<WordRow>(`/collection/${encodeURIComponent(key)}`),
+
+  /** GET /referrals/:address -> your referral dashboard. */
+  referrals: (address: string) =>
+    get<{
+      referrer: string | null;
+      invited: Array<{ address: string; words: number; volumeWei: string; ts: number }>;
+      totals: { count: number; wordsKept: number; volumeWei: string };
+    }>(`/referrals/${normAddr(address)}`),
+
+  /** POST /referral -> record who referred you (signed, set-once). */
+  setReferrer: (
+    address: string,
+    body: { referrer: string; timestamp: number; signature: `0x${string}` },
+  ) => post(`/referral`, { address: normAddr(address), ...body }),
+
+  /** POST /comment/:id/like -> toggle a like (signed). */
+  likeComment: (
+    address: string,
+    commentId: number,
+    body: { on: boolean; timestamp: number; signature: `0x${string}` },
+  ) => post<{ likes: number; liked: boolean }>(`/comment/${commentId}/like`, { address: normAddr(address), ...body }),
+
   /** GET /profile/:address -> meta + owned words, listings, activity, stats. */
   profile: async (address: string): Promise<Profile> => {
     try {
@@ -219,9 +259,10 @@ export const api = {
   userByName: (username: string) => get<Profile>(`/u/${encodeURIComponent(username)}`),
 
   /** GET /word/:word/comments -> comment thread. */
-  comments: async (word: string): Promise<Comment[]> => {
+  comments: async (word: string, viewer?: string): Promise<Comment[]> => {
+    const qs = viewer ? `?viewer=${normAddr(viewer)}` : "";
     try {
-      const c = await getList<Comment>(`/word/${encodeURIComponent(word)}/comments`);
+      const c = await getList<Comment>(`/word/${encodeURIComponent(word)}/comments${qs}`);
       if (c.length) return c;
     } catch {
       /* fall through to demo for demo words */
@@ -229,10 +270,10 @@ export const api = {
     return DEMO && demoHasWord(word) ? demoComments(word) : [];
   },
 
-  /** POST /word/:word/comments -> add a comment (signed). */
+  /** POST /word/:word/comments -> add a comment or reply (signed). */
   postComment: (
     word: string,
-    body: { address: string; body: string } & SignedFields,
+    body: { address: string; body: string; parentId?: number } & SignedFields,
   ) => post<Comment>(`/word/${encodeURIComponent(word)}/comments`, body),
 
   /** POST /profile/:address -> update profile meta (signed). */

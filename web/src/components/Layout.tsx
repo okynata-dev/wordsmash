@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { WalletButton } from "./WalletButton";
+import { NotificationBell } from "./NotificationBell";
+import { ReferralCapture } from "./ReferralCapture";
 import { SearchBox } from "./SearchBox";
 import { WelcomeModal } from "./WelcomeModal";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -60,6 +62,16 @@ function StatsIcon({ className = "" }: IconProps) {
   return (
     <svg {...stroke} className={`${ICON} ${className}`}>
       <path d="M4 20V10M10 20V4M16 20v-6M21 20H3" />
+    </svg>
+  );
+}
+function CollectionsIcon({ className = "" }: IconProps) {
+  return (
+    <svg {...stroke} className={`${ICON} ${className}`}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
     </svg>
   );
 }
@@ -198,11 +210,18 @@ function Logo() {
 const navItems = [
   { to: "/", label: "Home", end: true, Icon: HomeIcon },
   { to: "/market", label: "Market", Icon: MarketIcon },
+  { to: "/collections", label: "Collections", Icon: CollectionsIcon },
   { to: "/top", label: "Top", Icon: TopIcon },
   { to: "/activity", label: "Activity", Icon: ActivityIcon },
   { to: "/stats", label: "Stats", Icon: StatsIcon },
   { to: "/watchlist", label: "Watchlist", Icon: WatchIcon },
 ];
+
+// The mobile bottom bar can't hold every item — show the five most-used; the rest
+// live in the sidebar (desktop) and the mobile menu.
+const bottomNavItems = navItems.filter((i) =>
+  ["/", "/market", "/top", "/activity", "/watchlist"].includes(i.to),
+);
 
 function NavRow({
   to,
@@ -365,6 +384,7 @@ export function Layout() {
               <SearchBox />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <NotificationBell />
               <div className="hidden sm:block">
                 <WalletButton />
               </div>
@@ -425,6 +445,7 @@ export function Layout() {
         )}
 
         <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 pt-8 pb-24 sm:px-6 md:pb-8">
+          <ReferralCapture />
           <ErrorBoundary key={location.pathname}>
             <Outlet />
           </ErrorBoundary>
@@ -447,7 +468,7 @@ function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       aria-label="Primary"
     >
-      {navItems.map(({ to, end, label, Icon }) => (
+      {bottomNavItems.map(({ to, end, label, Icon }) => (
         <NavLink
           key={to}
           to={to}

@@ -4,6 +4,7 @@ import { createPublicClient, getAddress, http } from "viem";
 import { wordMarketAbi } from "../../shared/src/abis.js";
 import type { Db } from "./db.js";
 import { normalizeWord } from "../../shared/src/normalize.js";
+import { COLLECTIONS, collectionByKey } from "../../shared/src/collections.js";
 import type {
   WordRow,
   ListingRow,
@@ -17,6 +18,7 @@ import type {
   PositionRow,
   AnalyticsPoint,
   Analytics,
+  NotificationRow,
   Stats,
   CheckResult,
   Paginated,
@@ -240,6 +242,64 @@ export async function getWords(
     })),
     cursor: hasMore ? String(offset + PAGE_SIZE) : null,
   };
+}
+
+// GET /collections -> each curated collection with claimed/total counts.
+// GET /collection/:key -> the CLAIMED words in that collection as market-enriched rows.
+export async function getCollections(db: Db): Promise<
+  Array<{ key: string; title: string; emoji: string; blurb: string; total: number; claimed: number }>
+> {
+  const out = [];
+  for (const c of COLLECTIONS) {
+    if (c.words.length === 0) {
+      out.push({ ...meta(c), total: 0, claimed: 0 });
+      continue;
+    }
+    const ph = c.words.map(() => "?").join(",");
+    const row = await db
+      .prepare(`SELECT COUNT(*) AS n FROM words WHERE word IN (${ph})`)
+      .bind(...c.words)
+      .first<{ n: number }>();
+    out.push({ ...meta(c), total: c.words.length, claimed: Number(row?.n ?? 0) });
+  }
+  return out;
+
+  function meta(c: (typeof COLLECTIONS)[number]) {
+    return { key: c.key, title: c.title, emoji: c.emoji, blurb: c.blurb };
+  }
+}
+
+export async function getCollection(db: Db, key: string): Promise<WordRow[]> {
+  const c = collectionByKey(key);
+  if (!c || c.words.length === 0) return [];
+  const ph = c.words.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(
+      `SELECT w.token_id AS token_id, w.word AS word, w.owner AS owner, w.claimed_at AS claimed_at, w.tx AS tx,
+              m.last_price_wei AS price_wei, m.volume_wei AS m_volume, m.real_eth_reserve AS reserve, m.graduated AS m_grad
+       FROM words w LEFT JOIN markets m ON m.market = w.market
+       WHERE w.word IN (${ph})
+       ORDER BY CAST(COALESCE(m.volume_wei,'0') AS REAL) DESC, w.claimed_at DESC`,
+    )
+    .bind(...c.words)
+    .all<{
+      token_id: string;
+      word: string | null;
+      owner: string;
+      claimed_at: number;
+      tx: string;
+      price_wei: string | null;
+      m_volume: string | null;
+      reserve: string | null;
+      m_grad: number | null;
+    }>();
+  return results.map((r) => ({
+    ...toWordRow(r),
+    priceWei: r.price_wei ?? undefined,
+    tradeVolumeWei: r.m_volume ?? undefined,
+    graduated: r.m_grad != null ? !!r.m_grad : undefined,
+    graduationProgressBps: r.reserve != null ? progressBps(r.reserve, GRAD_THRESHOLD_WEI) : undefined,
+  }));
 }
 
 // GET /word/:word  (path param normalized first)
@@ -557,29 +617,115 @@ export async function getWordHolders(db: Db, rawWord: string): Promise<HolderRow
 
 // GET /profile/:address/positions -> every market this address has traded on
 // (candidates for the Positions tab; the client reads live balances on-chain).
+// Carries the NET cost basis per market (buys' gross ETH minus sells' ETH out)
+// so the client can show unrealized P&L against the live position value.
 const POSITIONS_CAP = 50;
 export async function getProfilePositions(db: Db, addressLower: string): Promise<PositionRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT DISTINCT t.market AS market, t.word AS word,
-              m.token_symbol AS token_symbol, m.last_price_wei AS last_price_wei
-       FROM trades t LEFT JOIN markets m ON m.market = t.market
-       WHERE t.trader = ?
-       ORDER BY t.market LIMIT ?`,
+      `SELECT market, word, is_buy, eth_wei FROM trades WHERE trader = ?
+       ORDER BY ts ASC, id ASC LIMIT 5000`,
     )
-    .bind(addressLower, POSITIONS_CAP)
-    .all<{
-      market: string;
-      word: string | null;
-      token_symbol: string | null;
-      last_price_wei: string | null;
-    }>();
-  return results.map((r) => ({
-    word: r.word ?? "",
-    market: r.market,
-    tokenSymbol: r.token_symbol ?? null,
-    lastPriceWei: r.last_price_wei ?? "0",
-  }));
+    .bind(addressLower)
+    .all<{ market: string; word: string | null; is_buy: number; eth_wei: string }>();
+
+  // Net ETH spent per market (buys add gross in, sells subtract ETH out). The
+  // Trade event's ethAmount is gross on both legs, so this is a fair cost basis.
+  const cost = new Map<string, { word: string; net: bigint }>();
+  const order: string[] = [];
+  for (const r of results) {
+    let wei = 0n;
+    try {
+      wei = BigInt(r.eth_wei ?? "0");
+    } catch {
+      wei = 0n;
+    }
+    const cur = cost.get(r.market);
+    if (!cur) {
+      order.push(r.market);
+      cost.set(r.market, { word: r.word ?? "", net: r.is_buy ? wei : -wei });
+    } else {
+      cur.net += r.is_buy ? wei : -wei;
+    }
+  }
+
+  const markets = order.slice(0, POSITIONS_CAP);
+  if (markets.length === 0) return [];
+  const placeholders = markets.map(() => "?").join(",");
+  const { results: metaRows } = await db
+    .prepare(
+      `SELECT market, token_symbol, last_price_wei FROM markets WHERE market IN (${placeholders})`,
+    )
+    .bind(...markets)
+    .all<{ market: string; token_symbol: string | null; last_price_wei: string | null }>();
+  const meta = new Map(metaRows.map((m) => [m.market, m]));
+
+  return markets.map((market) => {
+    const c = cost.get(market)!;
+    const m = meta.get(market);
+    return {
+      word: c.word,
+      market,
+      tokenSymbol: m?.token_symbol ?? null,
+      lastPriceWei: m?.last_price_wei ?? "0",
+      // Clamp at 0: a fully-realized position (sold more ETH out than put in) has
+      // no remaining basis to compute unrealized P&L against.
+      costWei: (c.net > 0n ? c.net : 0n).toString(),
+    };
+  });
+}
+
+// GET /notifications/:address -> recent events touching YOUR assets:
+//  · someone else trading a word whose deed you hold (you earned fees)
+//  · your deed being sold/bought on the marketplace
+// All derived from indexed events — no writes, no per-user state.
+const NOTIF_CAP = 40;
+export async function getNotifications(db: Db, addressLower: string): Promise<NotificationRow[]> {
+  // Trades by OTHERS on markets of words you currently own.
+  const { results: tradeRows } = await db
+    .prepare(
+      `SELECT t.word AS word, t.trader AS actor, t.is_buy AS is_buy, t.eth_wei AS amount, t.ts AS ts, t.tx AS tx
+       FROM trades t JOIN words w ON w.token_id = t.token_id
+       WHERE w.owner = ? AND t.trader != ?
+       ORDER BY t.ts DESC, t.id DESC LIMIT ?`,
+    )
+    .bind(addressLower, addressLower, NOTIF_CAP)
+    .all<{ word: string | null; actor: string; is_buy: number; amount: string; ts: number; tx: string }>();
+
+  // Deed sales where you were the seller or the buyer.
+  const { results: saleRows } = await db
+    .prepare(
+      `SELECT word, price, from_addr, to_addr, ts, tx FROM sales
+       WHERE from_addr = ? OR to_addr = ?
+       ORDER BY ts DESC, id DESC LIMIT ?`,
+    )
+    .bind(addressLower, addressLower, NOTIF_CAP)
+    .all<{ word: string | null; price: string; from_addr: string; to_addr: string; ts: number; tx: string }>();
+
+  const out: NotificationRow[] = [];
+  for (const r of tradeRows) {
+    out.push({
+      kind: "trade_on_your_word",
+      word: r.word ?? "",
+      actor: checksum(r.actor),
+      isBuy: Boolean(r.is_buy),
+      amountWei: r.amount ?? "0",
+      ts: Number(r.ts ?? 0),
+      tx: r.tx ?? "",
+    });
+  }
+  for (const r of saleRows) {
+    const youSold = r.from_addr?.toLowerCase() === addressLower;
+    out.push({
+      kind: youSold ? "your_deed_sold" : "your_deed_bought",
+      word: r.word ?? "",
+      actor: checksum(youSold ? r.to_addr : r.from_addr),
+      amountWei: r.price ?? "0",
+      ts: Number(r.ts ?? 0),
+      tx: r.tx ?? "",
+    });
+  }
+  return out.sort((a, b) => b.ts - a.ts).slice(0, NOTIF_CAP);
 }
 
 // GET /analytics -> 30-day daily activity + lifetime totals for the Stats page.

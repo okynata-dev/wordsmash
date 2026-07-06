@@ -11,6 +11,9 @@ import {
   getWordHolders,
   getProfilePositions,
   getAnalytics,
+  getNotifications,
+  getCollections,
+  getCollection,
   getCheck,
   getStats,
   getMarket,
@@ -32,9 +35,13 @@ import {
   globalActivity,
   getWatchlist,
   toggleWatchlist,
+  setReferrer,
+  getReferrals,
+  toggleCommentLike,
   type AvatarEnv,
 } from "./social.js";
 import { ogSvg, shareHtml } from "./og.js";
+import { isAddress } from "viem";
 
 // Worker env: D1 binding + vars + optional R2 avatars bucket. D1Database
 // satisfies the structural `Db` type.
@@ -190,6 +197,16 @@ export default {
           const res = await toggleWatchlist(db, address, body);
           return json(res);
         }
+        if (path === "/referral") {
+          const body = await readJson(request);
+          const address = requireAddress(String(body.address ?? ""));
+          return json(await setReferrer(db, address, body));
+        }
+        if (parts[0] === "comment" && parts[1] != null && parts[2] === "like") {
+          const body = await readJson(request);
+          const address = requireAddress(String(body.address ?? ""));
+          return json(await toggleCommentLike(db, address, Number(parts[1]), body));
+        }
         return notFound();
       }
 
@@ -210,7 +227,9 @@ export default {
       if (parts[0] === "word" && parts[1] != null && parts[2] === "comments") {
         const word = decodeURIComponent(parts[1]);
         const cursor = url.searchParams.get("cursor");
-        return json(await listComments(db, word, cursor));
+        const viewerRaw = url.searchParams.get("viewer");
+        const viewer = viewerRaw && isAddress(viewerRaw) ? viewerRaw.toLowerCase() : null;
+        return json(await listComments(db, word, cursor, viewer));
       }
 
       // /word/:word/trades  (v2 token-market trade log, newest-first)
@@ -291,6 +310,14 @@ export default {
       }
 
       // /profile/:address/positions  (markets ever traded — client verifies balances on-chain)
+      // /referrals/:address — referral dashboard (who you invited + their footprint)
+      if (parts[0] === "referrals" && parts[1] != null) {
+        const address = requireAddress(decodeURIComponent(parts[1]));
+        return json(await getReferrals(db, address), {
+          headers: { "Cache-Control": "public, max-age=15" },
+        });
+      }
+
       if (parts[0] === "profile" && parts[1] != null && parts[2] === "positions") {
         const address = requireAddress(decodeURIComponent(parts[1]));
         return json(await getProfilePositions(db, address), {
@@ -336,6 +363,27 @@ export default {
       if (path === "/analytics") {
         return json(await getAnalytics(db), {
           headers: { "Cache-Control": "public, max-age=60" },
+        });
+      }
+
+      // /notifications/:address — events touching your words/deeds
+      if (parts[0] === "notifications" && parts[1] != null) {
+        const address = requireAddress(decodeURIComponent(parts[1]));
+        return json(await getNotifications(db, address), {
+          headers: { "Cache-Control": "public, max-age=10" },
+        });
+      }
+
+      // /collections — curated collections with claimed/total counts
+      if (path === "/collections") {
+        return json(await getCollections(db), {
+          headers: { "Cache-Control": "public, max-age=30" },
+        });
+      }
+      // /collection/:key — claimed words in a collection (market-enriched)
+      if (parts[0] === "collection" && parts[1] != null) {
+        return json(await getCollection(db, decodeURIComponent(parts[1])), {
+          headers: { "Cache-Control": "public, max-age=30" },
         });
       }
 

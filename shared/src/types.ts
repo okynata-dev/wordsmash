@@ -85,6 +85,17 @@ export interface AnalyticsPoint {
   volumeWei: string; // gross token-trade ETH volume that day
 }
 
+/** One notification for the connected address (events touching their assets). */
+export interface NotificationRow {
+  kind: "trade_on_your_word" | "your_deed_sold" | "your_deed_bought";
+  word: string;
+  actor: string; // the other party (checksummed)
+  isBuy?: boolean; // for trade_on_your_word
+  amountWei: string; // trade ETH or sale price
+  ts: number;
+  tx: string;
+}
+
 /** Protocol-wide analytics: 30-day daily series + lifetime totals. */
 export interface Analytics {
   daily: AnalyticsPoint[];
@@ -112,6 +123,7 @@ export interface PositionRow {
   market: string;
   tokenSymbol: string | null;
   lastPriceWei: string;
+  costWei: string; // net ETH cost basis (buys gross - sells out), clamped ≥ 0
 }
 
 /** OHLC candle for the trading chart. Prices are wei strings; `t` is the bucket

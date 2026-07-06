@@ -172,6 +172,18 @@ describe("holders + positions", () => {
     expect(positions.length).toBe(1); // candidate market even though net is zero (client verifies)
     expect(positions[0].word).toBe("tea");
     expect(positions[0].market).toBe(MKT2);
+    expect(positions[0].costWei).toBe("0"); // bought 1 wei, sold 1 wei -> net 0, clamped
+  });
+
+  it("cost basis nets gross buys minus sell proceeds", async () => {
+    const db = await freshDb();
+    const MKT4 = "0x00000000000000000000000000000000000000dd";
+    await handleTransfer(db, { from: A.zero, to: A.alice, tokenId: 31n }, { tx: "0xd0", logIndex: 0, ts: 10 });
+    await handleWordClaimed(db, { word: "tin", tokenId: 31n, owner: A.alice, market: MKT4 }, { tx: "0xd0", logIndex: 1, ts: 10 });
+    await handleTrade(db, { market: MKT4, trader: A.bob, isBuy: true, ethWei: 10n, tokenAmount: 5n, priceWei: 1n }, { tx: "0xd1", logIndex: 0, ts: 20 });
+    await handleTrade(db, { market: MKT4, trader: A.bob, isBuy: false, ethWei: 3n, tokenAmount: 1n, priceWei: 1n }, { tx: "0xd2", logIndex: 0, ts: 30 });
+    const p = await getProfilePositions(db, A.bob.toLowerCase());
+    expect(p[0].costWei).toBe("7"); // 10 in - 3 out
   });
 });
 
