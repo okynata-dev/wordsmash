@@ -38,6 +38,14 @@ interface IMarketRegistry {
     function deedOfMarket(address market) external view returns (uint256);
 }
 
+interface IUniswapV3PoolMinimal {
+    /// @return sqrtPriceX96 the pool's current price (rest of slot0 unused here)
+    function slot0()
+        external
+        view
+        returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool);
+}
+
 /// @title UniV3Migrator
 /// @notice Turns a graduated word market's reserve (ETH + remaining curve tokens) into a
 ///         FULL-RANGE Uniswap v3 position whose LP NFT is minted straight to the dead
@@ -104,6 +112,7 @@ contract UniV3Migrator is ReentrancyGuard {
         require(sqrtPriceX96 > 0, "BAD_PRICE");
 
         pool = positionManager.createAndInitializePoolIfNecessary(token0, token1, feeTier, sqrtPriceX96);
+        _requireFairPrice(pool, sqrtPriceX96);
 
         IERC20(token0).approve(address(positionManager), amount0);
         IERC20(token1).approve(address(positionManager), amount1);
@@ -118,8 +127,12 @@ contract UniV3Migrator is ReentrancyGuard {
                 tickUpper: tickUpper,
                 amount0Desired: amount0,
                 amount1Desired: amount1,
-                amount0Min: 0, // atomic single-tx create+mint at our own initial price — no sandwich window
-                amount1Min: 0,
+                // Slippage floors (belt-and-suspenders with the price-band check above).
+                // At a matching price a full-range mint consumes ~100% of both sides, so
+                // a 90% floor never trips on an honest migration but blocks a skewed pool
+                // that would swallow one side almost entirely.
+                amount0Min: (amount0 * 9) / 10,
+                amount1Min: (amount1 * 9) / 10,
                 recipient: DEAD,
                 deadline: block.timestamp
             })
@@ -130,6 +143,19 @@ contract UniV3Migrator is ReentrancyGuard {
         _sweep(IERC20(token1), amount1 - used1);
 
         emit LiquidityLocked(msg.sender, pool, lpTokenId, token0 == address(weth) ? used0 : used1, token0 == address(weth) ? used1 : used0);
+    }
+
+    /// @dev Anti front-run: if an attacker pre-created + initialized the pool at a skewed
+    ///      price, createAndInitializePoolIfNecessary is a no-op and OUR price is ignored —
+    ///      a full-range mint into a mispriced pool would let them siphon the migrated
+    ///      reserve. Require the live pool price to match ours within a tight band, else
+    ///      revert. Migration is not lost: it re-cranks once the pool is arbitraged back to
+    ///      fair value (the curve keeps working until then).
+    function _requireFairPrice(address pool, uint160 expected) private view {
+        (uint160 live,,,,,,) = IUniswapV3PoolMinimal(pool).slot0();
+        uint256 lo = (uint256(expected) * 975) / 1000; // −2.5% on sqrtPrice (~−5% price)
+        uint256 hi = (uint256(expected) * 1025) / 1000; // +2.5% on sqrtPrice (~+5% price)
+        require(live >= lo && live <= hi, "POOL_PRICE_MANIPULATED");
     }
 
     function _sweep(IERC20 t, uint256 amount) private {

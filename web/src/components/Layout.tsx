@@ -181,25 +181,25 @@ function NetworkStatus() {
 }
 
 /**
- * The wordmark. The book lives on a blue gradient tile (app-icon style) — a fixed
- * tile aligns optically with the text where a bare glyph never quite did, and it
- * carries the brand blue so the wordmark itself stays one clean color.
+ * The wordmark. The mark is the orbit: a gradient orb (the word's market), a ring,
+ * and a satellite dot (the word, captured). Rendered inline so it stays crisp at
+ * any DPI and inherits nothing — the mark carries its own brand colors.
  */
 function Logo() {
   return (
     <Link to="/" className="flex shrink-0 items-center gap-2">
-      <span
-        className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[8px] text-white"
-        style={{
-          background: "linear-gradient(135deg, #5b8cff 0%, rgb(var(--c-volt)) 100%)",
-          boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.25), 0 1px 2px rgb(0 0 255 / 0.25)",
-        }}
-        aria-hidden="true"
-      >
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
-          <path d="M11.25 4.533A9.7 9.7 0 0 0 6 3a9.7 9.7 0 0 0-3.25.555.75.75 0 0 0-.5.707v13.5a.75.75 0 0 0 1 .707A8.2 8.2 0 0 1 6 18c1.99 0 3.82.706 5.25 1.885V4.533ZM12.75 19.885A8.2 8.2 0 0 1 18 18c.96 0 1.89.165 2.75.47a.75.75 0 0 0 1-.708v-13.5a.75.75 0 0 0-.5-.707A9.7 9.7 0 0 0 18 3a9.7 9.7 0 0 0-5.25 1.533v15.352Z" />
-        </svg>
-      </span>
+      <svg viewBox="0 0 200 200" width="26" height="26" className="shrink-0" aria-hidden="true">
+        <defs>
+          <radialGradient id="logo-orb" cx="0.35" cy="0.3" r="1">
+            <stop offset="0" stopColor="#8fb0ff" />
+            <stop offset="0.6" stopColor="#1230ff" />
+            <stop offset="1" stopColor="#0000d0" />
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="46" fill="url(#logo-orb)" />
+        <circle cx="100" cy="100" r="74" fill="none" stroke="#5b8cff" strokeWidth="10" />
+        <circle cx="157" cy="53" r="14" fill="#0000ff" />
+      </svg>
       <span className="font-display text-[17px] font-semibold leading-none tracking-tight">
         keepney
       </span>

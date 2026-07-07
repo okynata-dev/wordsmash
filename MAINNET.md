@@ -68,13 +68,21 @@ the owner wires an adapter:
 # deploy the adapter (constructor: positionManager, WETH, registry, dustReceiver, fee, tickSpacing)
 forge create src/UniV3Migrator.sol:UniV3Migrator --rpc-url $RPC ... \
   --constructor-args $UNIV3_POSITION_MANAGER $WETH $REGISTRY $TREASURY 10000 200
-cast send $REGISTRY "setMigrator(address)" $MIGRATOR   # from the Safe
+cast send $REGISTRY "setMigrator(address)" $MIGRATOR   # from the Safe — WRITE-ONCE, see below
 ```
 On Base mainnet use the canonical Uniswap v3 `NonfungiblePositionManager` and `WETH9`
 addresses from Uniswap's deployments page (verify code exists at both with `cast code`
 before wiring). Ship with the migrator UNSET and wire it post-audit — graduated markets
 keep their sells open on the curve until then, so nothing is ever stuck either way.
 After migration, curve fee pots (deed + protocol) remain claimable on the market forever.
+
+> **`setMigrator` is write-once and irreversible.** It reverts once a non-zero migrator is
+> set (and rejects `address(0)`). This closes an owner-key-compromise drain path — `migrate()`
+> forwards a graduated market's whole reserve to the migrator, so a swappable one would let a
+> compromised owner point it at a draining contract. **Triple-check the adapter address before
+> this single tx**; changing it later requires deploying a new registry. The adapter itself is
+> hardened against pre-created/mispriced pools (it verifies the live pool price is within ±2.5%
+> of the reserve ratio and mints with 90% slippage floors, reverting on `POOL_PRICE_MANIPULATED`).
 
 ## Post-deploy verification battery
 

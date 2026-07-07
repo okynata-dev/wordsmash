@@ -169,13 +169,13 @@ describe("holders + positions", () => {
     expect(holders[0].netTokens).toBe("300");
 
     const positions = await getProfilePositions(db, A.alice.toLowerCase());
-    expect(positions.length).toBe(1); // candidate market even though net is zero (client verifies)
+    expect(positions.length).toBe(1); // candidate market even though nothing is held (client verifies)
     expect(positions[0].word).toBe("tea");
     expect(positions[0].market).toBe(MKT2);
-    expect(positions[0].costWei).toBe("0"); // bought 1 wei, sold 1 wei -> net 0, clamped
+    expect(positions[0].costWei).toBe("0"); // sold all 100 tokens -> full exit -> no basis
   });
 
-  it("cost basis nets gross buys minus sell proceeds", async () => {
+  it("cost basis = average cost of the tokens STILL HELD", async () => {
     const db = await freshDb();
     const MKT4 = "0x00000000000000000000000000000000000000dd";
     await handleTransfer(db, { from: A.zero, to: A.alice, tokenId: 31n }, { tx: "0xd0", logIndex: 0, ts: 10 });
@@ -183,7 +183,24 @@ describe("holders + positions", () => {
     await handleTrade(db, { market: MKT4, trader: A.bob, isBuy: true, ethWei: 10n, tokenAmount: 5n, priceWei: 1n }, { tx: "0xd1", logIndex: 0, ts: 20 });
     await handleTrade(db, { market: MKT4, trader: A.bob, isBuy: false, ethWei: 3n, tokenAmount: 1n, priceWei: 1n }, { tx: "0xd2", logIndex: 0, ts: 30 });
     const p = await getProfilePositions(db, A.bob.toLowerCase());
-    expect(p[0].costWei).toBe("7"); // 10 in - 3 out
+    // Held 4 of the 5 tokens bought for 10 wei -> basis of the remainder = 4/5 * 10 = 8.
+    // (The old net-ETH method gave "7" = 10-3, and was biased by sell fees + broke on
+    // partial exits.) The 3 wei actually received is irrelevant to the remaining basis.
+    expect(p[0].costWei).toBe("8");
+  });
+
+  it("partial profitable exit does not inflate remaining basis (the +200% regression)", async () => {
+    const db = await freshDb();
+    const MKT5 = "0x00000000000000000000000000000000000000ee";
+    await handleTransfer(db, { from: A.zero, to: A.alice, tokenId: 41n }, { tx: "0xe0", logIndex: 0, ts: 10 });
+    await handleWordClaimed(db, { word: "oak", tokenId: 41n, owner: A.alice, market: MKT5 }, { tx: "0xe0", logIndex: 1, ts: 10 });
+    // buy 1,000,000 tokens for 10 wei, then sell half for 8 wei (a profitable partial exit)
+    await handleTrade(db, { market: MKT5, trader: A.bob, isBuy: true, ethWei: 10n, tokenAmount: 1_000_000n, priceWei: 1n }, { tx: "0xe1", logIndex: 0, ts: 20 });
+    await handleTrade(db, { market: MKT5, trader: A.bob, isBuy: false, ethWei: 8n, tokenAmount: 500_000n, priceWei: 1n }, { tx: "0xe2", logIndex: 0, ts: 30 });
+    const p = await getProfilePositions(db, A.bob.toLowerCase());
+    // Remaining basis = half of 10 = 5 (NOT net 10-8=2, which would have shown +200%
+    // against a 6-wei mark instead of the honest +20%).
+    expect(p[0].costWei).toBe("5");
   });
 });
 

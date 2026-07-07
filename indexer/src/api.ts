@@ -196,14 +196,20 @@ export async function getWords(
   cursor: string | null,
 ): Promise<Paginated<WordRow>> {
   const offset = cursor ? Math.min(Math.max(0, parseInt(cursor, 10) || 0), MAX_OFFSET) : 0;
+  // wei are stored as base-10 integer strings (from BigInt.toString(), no leading
+  // zeros), so CAST(... AS REAL) would lose precision above 2^53 and misorder large
+  // markets. Order by digit-count then lexicographically — exact for non-negative
+  // integer strings, no float involved.
   let orderBy: string;
   if (sort === "trading") {
-    orderBy = "CAST(COALESCE(m.volume_wei,'0') AS REAL) DESC, w.claimed_at DESC";
+    orderBy =
+      "LENGTH(COALESCE(m.volume_wei,'0')) DESC, COALESCE(m.volume_wei,'0') DESC, w.claimed_at DESC";
   } else if (sort === "graduating") {
     orderBy =
-      "COALESCE(m.graduated,0) ASC, CAST(COALESCE(m.real_eth_reserve,'0') AS REAL) DESC, w.claimed_at DESC";
+      "COALESCE(m.graduated,0) ASC, LENGTH(COALESCE(m.real_eth_reserve,'0')) DESC, COALESCE(m.real_eth_reserve,'0') DESC, w.claimed_at DESC";
   } else if (sort === "volume") {
-    orderBy = "CAST(w.volume_wei AS REAL) DESC, w.claimed_at DESC";
+    orderBy =
+      "LENGTH(COALESCE(w.volume_wei,'0')) DESC, COALESCE(w.volume_wei,'0') DESC, w.claimed_at DESC";
   } else {
     orderBy = "w.claimed_at DESC, w.token_id DESC";
   }
@@ -279,7 +285,7 @@ export async function getCollection(db: Db, key: string): Promise<WordRow[]> {
               m.last_price_wei AS price_wei, m.volume_wei AS m_volume, m.real_eth_reserve AS reserve, m.graduated AS m_grad
        FROM words w LEFT JOIN markets m ON m.market = w.market
        WHERE w.word IN (${ph})
-       ORDER BY CAST(COALESCE(m.volume_wei,'0') AS REAL) DESC, w.claimed_at DESC`,
+       ORDER BY LENGTH(COALESCE(m.volume_wei,'0')) DESC, COALESCE(m.volume_wei,'0') DESC, w.claimed_at DESC`,
     )
     .bind(...c.words)
     .all<{
@@ -544,7 +550,7 @@ export async function getWordCandles(
       }
       // Open at the previous close (standard charting), so candles chain visually
       // even when buckets are sparse; the very first candle opens at its own trade.
-      const open = cur !== null ? cur.c : price;
+      const open: bigint = cur !== null ? cur.c : price;
       cur = {
         t,
         o: open,
@@ -623,29 +629,47 @@ const POSITIONS_CAP = 50;
 export async function getProfilePositions(db: Db, addressLower: string): Promise<PositionRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT market, word, is_buy, eth_wei FROM trades WHERE trader = ?
+      `SELECT market, word, is_buy, eth_wei, token_amount FROM trades WHERE trader = ?
        ORDER BY ts ASC, id ASC LIMIT 5000`,
     )
     .bind(addressLower)
-    .all<{ market: string; word: string | null; is_buy: number; eth_wei: string }>();
+    .all<{ market: string; word: string | null; is_buy: number; eth_wei: string; token_amount: string }>();
 
-  // Net ETH spent per market (buys add gross in, sells subtract ETH out). The
-  // Trade event's ethAmount is gross on both legs, so this is a fair cost basis.
-  const cost = new Map<string, { word: string; net: bigint }>();
+  // AVERAGE-COST basis on the tokens STILL HELD, per market. A buy adds the gross ETH
+  // paid to the basis and its tokens to the held amount; a sell removes basis in
+  // proportion to the tokens sold (NOT by ETH received). So costWei is the basis of
+  // what you still hold — unrealized P&L against the live position value stays correct
+  // after partial sells, and sell-side fees don't distort it. (The old net-ETH method
+  // could show +200% after a profitable partial exit and was biased by the 1% sell fee.)
+  const big = (s: string) => {
+    try {
+      return BigInt(s ?? "0");
+    } catch {
+      return 0n;
+    }
+  };
+  const pos = new Map<string, { word: string; tokens: bigint; cost: bigint }>();
   const order: string[] = [];
   for (const r of results) {
-    let wei = 0n;
-    try {
-      wei = BigInt(r.eth_wei ?? "0");
-    } catch {
-      wei = 0n;
-    }
-    const cur = cost.get(r.market);
-    if (!cur) {
+    let p = pos.get(r.market);
+    if (!p) {
+      p = { word: r.word ?? "", tokens: 0n, cost: 0n };
+      pos.set(r.market, p);
       order.push(r.market);
-      cost.set(r.market, { word: r.word ?? "", net: r.is_buy ? wei : -wei });
-    } else {
-      cur.net += r.is_buy ? wei : -wei;
+    }
+    const eth = big(r.eth_wei);
+    const tok = big(r.token_amount);
+    if (r.is_buy) {
+      p.tokens += tok;
+      p.cost += eth;
+    } else if (p.tokens > 0n) {
+      if (tok >= p.tokens) {
+        p.tokens = 0n;
+        p.cost = 0n; // full exit — no remaining basis
+      } else {
+        p.cost -= (p.cost * tok) / p.tokens; // drop basis in proportion to tokens sold
+        p.tokens -= tok;
+      }
     }
   }
 
@@ -661,16 +685,16 @@ export async function getProfilePositions(db: Db, addressLower: string): Promise
   const meta = new Map(metaRows.map((m) => [m.market, m]));
 
   return markets.map((market) => {
-    const c = cost.get(market)!;
+    const c = pos.get(market)!;
     const m = meta.get(market);
     return {
       word: c.word,
       market,
       tokenSymbol: m?.token_symbol ?? null,
       lastPriceWei: m?.last_price_wei ?? "0",
-      // Clamp at 0: a fully-realized position (sold more ETH out than put in) has
-      // no remaining basis to compute unrealized P&L against.
-      costWei: (c.net > 0n ? c.net : 0n).toString(),
+      // Basis of the tokens still held (0 after a full exit) — the client compares it
+      // to the live mark-to-market value for unrealized P&L.
+      costWei: (c.cost > 0n ? c.cost : 0n).toString(),
     };
   });
 }

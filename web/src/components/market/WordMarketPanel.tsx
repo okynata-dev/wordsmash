@@ -6,7 +6,6 @@ import { api } from "../../api";
 import { registryAddress, wordRegistryAbi, wordToTokenId } from "../../contracts";
 import { ADDRESSES_READY } from "../../config";
 import { Card, Pill, Skeleton } from "../ui";
-import { WhitelistGate } from "../WhitelistGate";
 import { WalletButton } from "../WalletButton";
 import { ethLabel, tokenLabel, normAddr, toWei } from "../../lib/format";
 import { useWrongNetwork } from "../../hooks/useRegistry";
@@ -15,30 +14,15 @@ import { TradeBox } from "./TradeBox";
 import { DeedFees } from "./DeedFees";
 import { RecentTrades } from "./RecentTrades";
 import { Holders } from "./Holders";
-import { TVChart } from "./TVChart";
+// TradingView Lightweight Charts (Apache-2.0) — the real TradingView candlestick
+// look, fed by our own /candles data. Ships in its own lazy chunk.
+const TVLightweightChart = lazy(() => import("./TVLightweightChart"));
 
-// KLineCharts (pro candles + indicators) ships in its own lazy chunk.
-const KLineChart = lazy(() => import("./KLineChart"));
-
-/**
- * Chart ladder: TradingView Advanced Charts when the (self-hosted, license-gated)
- * library is installed → otherwise KLineCharts, the open-source pro chart with
- * indicators. TVChart signals unavailability so this flips with no layout jump and
- * no dependency on the vendor folder being present.
- */
-function MarketChart({ word, symbol }: { word: string; symbol?: string | null }) {
-  const [tvOut, setTvOut] = useState(false);
-  if (tvOut) {
-    return (
-      <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-xl" />}>
-        <KLineChart word={word} />
-      </Suspense>
-    );
-  }
+function MarketChart({ word }: { word: string }) {
   return (
-    <Card className="fade-up p-0" style={{ animationDelay: "60ms" }}>
-      <TVChart word={word} symbol={symbol} onUnavailable={() => setTvOut(true)} />
-    </Card>
+    <Suspense fallback={<Skeleton className="h-[360px] w-full rounded-xl" />}>
+      <TVLightweightChart word={word} />
+    </Suspense>
   );
 }
 
@@ -231,8 +215,8 @@ export function WordMarketPanel({
           />
         </Card>
 
-        {/* Trading chart — TradingView Advanced Charts if installed, candles otherwise */}
-        <MarketChart word={word} symbol={symbol} />
+        {/* Trading chart — TradingView Lightweight Charts on our own candle data */}
+        <MarketChart word={word} />
 
         {/* Recent trades */}
         <RecentTrades word={word} symbol={symbol} />

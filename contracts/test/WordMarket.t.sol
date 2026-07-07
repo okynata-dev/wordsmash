@@ -187,6 +187,24 @@ contract WordMarketTest is Base {
         assertEq(bob.balance - before, q);
     }
 
+    /// Regression: sells stay open after graduation (until migration), so quoteSell
+    /// must keep quoting a real number there — returning 0 pushed clients to send
+    /// sell(amount, 0) with no slippage floor. Gate is `migrated`, not `graduated`.
+    function test_QuoteSellStillQuotesWhileGraduated() public {
+        vm.prank(bob);
+        m.buy{value: 11 ether}(0);
+        assertTrue(m.graduated());
+        assertFalse(m.migrated());
+        uint256 bal = m.balanceOf(bob);
+        uint256 q = m.quoteSell(bal / 2);
+        assertGt(q, 0); // real quote during the graduated-but-not-migrated window
+        // and it matches an actual sell
+        uint256 before = bob.balance;
+        vm.prank(bob);
+        m.sell(bal / 2, 0);
+        assertEq(bob.balance - before, q);
+    }
+
     function test_MarketCapAndMetadata() public {
         assertEq(m.name(), "bread");
         assertEq(m.symbol(), "BREAD");

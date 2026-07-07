@@ -137,7 +137,6 @@ export function demoComments(word: string): Comment[] {
   const slug = word.trim().toLowerCase();
   const i = W.findIndex(([w]) => w === slug);
   if (i < 0) return [];
-  const now = nowSec();
   // 2–4 deterministic comments per word, newest first.
   const count = 2 + (i % 3);
   const out: Comment[] = [];

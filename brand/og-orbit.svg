@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="keepney — keep a word">
+  <defs>
+    <radialGradient id="ogOrb" cx="0.35" cy="0.3" r="1">
+      <stop offset="0" stop-color="#8fb0ff"/>
+      <stop offset="0.6" stop-color="#1230ff"/>
+      <stop offset="1" stop-color="#0000d0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#ffffff"/>
+  <!-- орбита -->
+  <circle cx="300" cy="315" r="120" fill="url(#ogOrb)"/>
+  <circle cx="300" cy="315" r="190" fill="none" stroke="#5b8cff" stroke-width="13"/>
+  <circle cx="445" cy="193" r="28" fill="#0000ff"/>
+  <!-- слово -->
+  <text x="560" y="342" font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="104" letter-spacing="-3" fill="#14161f">keepney</text>
+  <text x="566" y="408" font-family="Helvetica,Arial,sans-serif" font-size="34" fill="#6b7080">Keep a word. Earn on every trade.</text>
+</svg>

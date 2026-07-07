@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1500 500">
+<rect width="1500" height="500" fill="#ffffff"/>
+  <defs><radialGradient id="g8" cx="0.35" cy="0.3" r="1"><stop offset="0" stop-color="#8fb0ff"/><stop offset="0.6" stop-color="#1230ff"/><stop offset="1" stop-color="#0000d0"/></radialGradient></defs>
+  <circle cx="1120" cy="250" r="210" fill="none" stroke="#cfdcff" stroke-width="3"/>
+    <circle cx="930" cy="161" r="15" fill="#0000ff"/>
+    <text x="955" y="169" font-family="Menlo,monospace" font-size="26" fill="#6b7080">gm</text><circle cx="1120" cy="250" r="300" fill="none" stroke="#cfdcff" stroke-width="3"/>
+    <circle cx="1366" cy="78" r="13" fill="#0000ff"/>
+    <text x="1389" y="86" font-family="Menlo,monospace" font-size="26" fill="#6b7080">doge</text><circle cx="1120" cy="250" r="390" fill="none" stroke="#cfdcff" stroke-width="3"/>
+    <circle cx="767" cy="415" r="11" fill="#0000ff"/>
+    <text x="788" y="423" font-family="Menlo,monospace" font-size="26" fill="#6b7080">wagmi</text>
+  <circle cx="1120" cy="250" r="120" fill="url(#g8)"/>
+  <text x="90" y="262" font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="110" letter-spacing="-3" fill="#14161f">keepney<tspan fill="#0000ff">.</tspan></text>
+  <text x="96" y="330" font-family="Helvetica,Arial,sans-serif" font-size="38" fill="#6b7080">Every word finds its orbit.</text>
+</svg>

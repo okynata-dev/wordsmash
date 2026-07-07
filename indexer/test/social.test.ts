@@ -295,7 +295,6 @@ describe("avatar (local-dev fallback)", () => {
 // ── referrals ────────────────────────────────────────────────────────────────
 import { setReferrer, getReferrals, toggleCommentLike } from "../src/social.js";
 import { referralMessage, commentLikeMessage } from "../../shared/src/social.js";
-import { handleTransfer } from "../src/handlers.js";
 
 describe("referrals", () => {
   async function makeOwner(db: Awaited<ReturnType<typeof freshDb>>, addr: string, word: string, tokenId: bigint) {

@@ -350,10 +350,18 @@ contract WordRegistry is ERC721, Ownable, ReentrancyGuard {
         emit PausedUpdated(paused_);
     }
 
-    /// @notice Wire (or unwire) the DEX-migration adapter used by graduated markets.
-    ///         Setting it never moves funds by itself — migrate() is a public crank on
-    ///         each market and is atomic against a broken adapter.
+    /// @notice Wire the DEX-migration adapter used by graduated markets. WRITE-ONCE:
+    ///         once set to a non-zero address it can never be changed. This closes an
+    ///         owner-key-compromise path — migrate() forwards a graduated market's whole
+    ///         reserve (buyers' ETH) to this address, so a swappable migrator would let a
+    ///         malicious owner point it at a draining contract and crank every market. The
+    ///         one and only migrator must be the audited adapter (which locks LP to dead).
+    ///         Swapping adapters later requires a new registry — an intentional, heavy
+    ///         governance event, not a hot owner switch. Setting it never moves funds by
+    ///         itself; migrate() is a public per-market crank, atomic against a broken adapter.
     function setMigrator(address migrator_) external onlyOwner {
+        require(migrator == address(0), "MIGRATOR_LOCKED");
+        require(migrator_ != address(0), "ZERO_MIGRATOR");
         migrator = migrator_;
         emit MigratorUpdated(migrator_);
     }

@@ -39,6 +39,48 @@ type State =
   | { kind: "available"; normalized: string }
   | { kind: "taken"; normalized: string };
 
+// ── commit-reveal persistence ────────────────────────────────────────────────
+// A commit costs gas and the reveal must follow within the on-chain COMMIT_MAX_AGE.
+// The salt lives ONLY in the browser, so a refresh/navigation mid-countdown used to
+// orphan the commit (gas burned, word unclaimable, a window opened for a sniper).
+// Persist {word, salt, revealAt, address} in sessionStorage so the countdown resumes.
+const COMMIT_STORE_PREFIX = "keepney.commit.";
+const COMMIT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // matches the contract's COMMIT_MAX_AGE (1 day)
+
+interface StoredCommit {
+  word: string;
+  salt: `0x${string}`;
+  revealAt: number;
+  address: string;
+}
+
+function loadCommit(addr?: string): StoredCommit | null {
+  if (!addr) return null;
+  try {
+    const raw = sessionStorage.getItem(COMMIT_STORE_PREFIX + addr.toLowerCase());
+    return raw ? (JSON.parse(raw) as StoredCommit) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCommit(v: StoredCommit): void {
+  try {
+    sessionStorage.setItem(COMMIT_STORE_PREFIX + v.address.toLowerCase(), JSON.stringify(v));
+  } catch {
+    /* ignore quota/availability */
+  }
+}
+
+function clearCommit(addr?: string): void {
+  if (!addr) return;
+  try {
+    sessionStorage.removeItem(COMMIT_STORE_PREFIX + addr.toLowerCase());
+  } catch {
+    /* ignore */
+  }
+}
+
 export function Home() {
   const [raw, setRaw] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -124,6 +166,10 @@ export function Home() {
   const commitReceipt = useWaitForTransactionReceipt({ hash: commitWrite.data });
   useReceiptError(commitReceipt, "The claim reservation");
   const saltRef = useRef<`0x${string}` | null>(null);
+  // The address the commitment was bound to — the reveal must fire from THIS address
+  // (the on-chain commitment = keccak(word, committer, salt)), so a mid-countdown
+  // account switch must not auto-send a doomed reveal from the new address.
+  const committedAddrRef = useRef<string | null>(null);
   const [revealAt, setRevealAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(0);
 
@@ -136,6 +182,7 @@ export function Home() {
         .join("")) as `0x${string}`;
     saltRef.current = salt;
     claimingWordRef.current = word;
+    committedAddrRef.current = (address as string).toLowerCase();
     // commitment binds (word, OUR address, salt) — copying it does a sniper no good
     const commitment = keccak256(
       encodePacked(["string", "address", "bytes32"], [word, address as `0x${string}`, salt]),
@@ -159,11 +206,41 @@ export function Home() {
     );
   }
 
-  // Commit confirmed -> arm the countdown (small buffer over the on-chain min delay).
+  // Commit confirmed -> arm the countdown (small buffer over the on-chain min delay)
+  // and persist it so a refresh/navigation during the countdown can resume the reveal.
   useEffect(() => {
-    if (commitReceipt.isSuccess) setRevealAt(Date.now() + (minDelaySec + 2) * 1000);
+    if (commitReceipt.isSuccess) {
+      const at = Date.now() + (minDelaySec + 2) * 1000;
+      setRevealAt(at);
+      if (address && saltRef.current && claimingWordRef.current) {
+        saveCommit({
+          word: claimingWordRef.current,
+          salt: saltRef.current,
+          revealAt: at,
+          address: (address as string).toLowerCase(),
+        });
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commitReceipt.isSuccess]);
+
+  // On mount / account change: resume a pending commit for this address if one was
+  // persisted and is still within the on-chain reveal window.
+  useEffect(() => {
+    if (!address || revealAt !== null || commitWrite.isPending || commitReceipt.isLoading) return;
+    const v = loadCommit(address);
+    if (!v) return;
+    if (Date.now() > v.revealAt + COMMIT_MAX_AGE_MS) {
+      clearCommit(address); // too old to reveal on-chain anymore
+      return;
+    }
+    saltRef.current = v.salt;
+    claimingWordRef.current = v.word;
+    committedAddrRef.current = v.address.toLowerCase();
+    setRaw(v.word);
+    setRevealAt(v.revealAt); // arms the countdown/auto-reveal effect below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]);
 
   // Tick down, then auto-send the reveal — one tap for the user, two txs under the hood.
   useEffect(() => {
@@ -177,6 +254,13 @@ export function Home() {
       const w = claimingWordRef.current;
       const salt = saltRef.current;
       if (!w || !salt) return;
+      // The reveal must fire from the address the commitment was bound to. If the
+      // user switched accounts mid-countdown, don't broadcast a doomed reveal from
+      // the wrong address — pause and keep the persisted commit for when they switch back.
+      if (!address || (address as string).toLowerCase() !== committedAddrRef.current) {
+        toast.error("Switch back to the wallet that reserved this word to finish the claim.");
+        return;
+      }
       writeContract(
         {
           address: registryAddress,
@@ -190,6 +274,7 @@ export function Home() {
           onError: (e) => {
             claimingWordRef.current = null;
             saltRef.current = null;
+            clearCommit(committedAddrRef.current ?? undefined);
             toast.error(friendlyError(e));
           },
           onSuccess: () => toast.info("Claiming… confirm in your wallet"),
@@ -213,6 +298,7 @@ export function Home() {
     if (!w) return;
     fireSmash(); // celebration burst the moment the claim lands
     toast.success(`Kept "${w}"`);
+    clearCommit(committedAddrRef.current ?? address); // consumed — drop the persisted commit
     void refetchRemaining();
     // Prime caches to ride out indexer lag, then ALWAYS land on the word's page so
     // the user sees their new token + can trade it. Navigation must not hinge on the

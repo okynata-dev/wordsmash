@@ -6,7 +6,9 @@ export interface DbStatement {
   bind(...args: unknown[]): DbStatement;
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
   first<T = Record<string, unknown>>(): Promise<T | null>;
-  run(): Promise<{ success: boolean }>;
+  // `meta.changes` = rows actually written (D1 shape). Used for atomic
+  // insert-and-check (e.g. the replay guard treats 0 changes as "already seen").
+  run(): Promise<{ success: boolean; meta?: { changes?: number } }>;
 }
 
 export interface Db {
@@ -62,9 +64,9 @@ class NodeSqliteStatement implements DbStatement {
     return (row ?? null) as T | null;
   }
 
-  async run(): Promise<{ success: boolean }> {
-    this.stmt.run(...this.args);
-    return { success: true };
+  async run(): Promise<{ success: boolean; meta?: { changes?: number } }> {
+    const r = this.stmt.run(...this.args) as { changes?: number | bigint } | undefined;
+    return { success: true, meta: { changes: Number(r?.changes ?? 0) } };
   }
 }
 

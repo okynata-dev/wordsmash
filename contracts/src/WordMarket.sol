@@ -99,6 +99,9 @@ contract WordMarket is ERC20, ReentrancyGuard {
         require(cfg.protocolBps + cfg.deedBps + cfg.liquidityBps == BPS, "BAD_SPLIT");
         require(cfg.tradeFeeBps <= 1000, "FEE_TOO_HIGH");
         require(cfg.tokenSupply > 0 && cfg.virtualEthReserve > 0, "BAD_CURVE");
+        // Bound the supply so the migrator's fixed-point price math (amount1 << 96) can
+        // never overflow: token side ≤ 1e33 wei keeps (amount1 << 96) far under 2^256.
+        require(cfg.tokenSupply <= 1e33, "SUPPLY_TOO_LARGE");
         initialized = true;
 
         _tokenName = name_;
@@ -293,9 +296,15 @@ contract WordMarket is ERC20, ReentrancyGuard {
     }
 
     function quoteSell(uint256 tokenAmount) external view returns (uint256 ethOut) {
-        if (tokenAmount == 0 || graduated) return 0;
+        // Sells stay open until migration empties the reserve — quote until `migrated`,
+        // NOT `graduated`. Gating on `graduated` returned 0 during the graduated-but-not-
+        // -migrated window where sell() is fully live, which pushed clients to submit
+        // sells with a zero slippage floor. Also mirror sell()'s solvency bound so the
+        // quote never promises more than the curve can actually pay out.
+        if (tokenAmount == 0 || migrated) return 0;
         uint256 k = virtualEthReserve * virtualTokenReserve;
         uint256 grossEthOut = virtualEthReserve - _ceilDiv(k, virtualTokenReserve + tokenAmount);
+        if (grossEthOut == 0 || grossEthOut > realEthReserve) return 0;
         uint256 fee = (grossEthOut * tradeFeeBps) / BPS;
         ethOut = grossEthOut - fee;
     }

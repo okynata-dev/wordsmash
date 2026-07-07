@@ -93,6 +93,9 @@ export function useQuoteBuy(market: string | null | undefined, ethWei: bigint | 
     args: ethWei !== null ? [ethWei] : undefined,
     query: {
       enabled: ADDRESSES_READY && Boolean(address) && ethWei !== null && ethWei > 0n,
+      // Keep the quote (and the slippage floor derived from it) fresh, so a min-out
+      // computed off a stale price doesn't silently weaken protection or guarantee a revert.
+      refetchInterval: 12_000,
     },
   });
 }
@@ -107,6 +110,7 @@ export function useQuoteSell(market: string | null | undefined, tokenAmount: big
     args: tokenAmount !== null ? [tokenAmount] : undefined,
     query: {
       enabled: ADDRESSES_READY && Boolean(address) && tokenAmount !== null && tokenAmount > 0n,
+      refetchInterval: 12_000,
     },
   });
 }

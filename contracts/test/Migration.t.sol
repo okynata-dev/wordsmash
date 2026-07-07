@@ -61,23 +61,55 @@ contract MockWETH {
     }
 }
 
+/// Minimal Uniswap-v3 pool mock: models "initialize once" semantics so the migrator's
+/// anti-front-run price check can be exercised. Pre-initializing it at a skewed price
+/// simulates an attacker who created the pool before migration.
+contract MockUniPool {
+    uint160 public price; // sqrtPriceX96
+    bool public initialized;
+
+    /// Mirrors real v3: only the FIRST initialize sets the price; later calls are no-ops.
+    function initialize(uint160 sqrtPriceX96) external {
+        if (!initialized) {
+            price = sqrtPriceX96;
+            initialized = true;
+        }
+    }
+
+    function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+        return (price, int24(0), uint16(0), uint16(0), uint16(0), uint8(0), false);
+    }
+}
+
 /// Position manager mock: consumes ~all of both sides (leaves 1 wei dust of token1),
-/// records the mint params so the test can assert full-range + dead recipient.
+/// records the mint params so the test can assert full-range + dead recipient. Holds a
+/// MockUniPool and initializes it via createAndInitializePoolIfNecessary (once-only, like v3).
 contract MockPositionManager {
-    address public pool = address(0xCAFE);
+    MockUniPool public poolContract;
     int24 public lastTickLower;
     int24 public lastTickUpper;
     address public lastRecipient;
     uint24 public lastFee;
-    uint160 public initPrice;
+
+    constructor() {
+        poolContract = new MockUniPool();
+    }
+
+    function pool() external view returns (address) {
+        return address(poolContract);
+    }
+
+    function initPrice() external view returns (uint160) {
+        return poolContract.price();
+    }
 
     function createAndInitializePoolIfNecessary(address, address, uint24, uint160 sqrtPriceX96)
         external
         payable
         returns (address)
     {
-        initPrice = sqrtPriceX96;
-        return pool;
+        poolContract.initialize(sqrtPriceX96); // no-op if an attacker pre-initialized it
+        return address(poolContract);
     }
 
     function mint(INonfungiblePositionManager.MintParams calldata p)
@@ -133,6 +165,20 @@ contract MigrationTest is Base {
         registry.setMigrator(address(migrator));
         vm.expectRevert(bytes("NOT_GRADUATED"));
         m.migrate();
+    }
+
+    /// HIGH-2 regression: migrator is write-once, so a compromised owner cannot repoint
+    /// it at a draining adapter after markets have accumulated reserves.
+    function test_MigratorIsWriteOnce() public {
+        registry.setMigrator(address(migrator));
+        MockMigrator evil = new MockMigrator();
+        vm.expectRevert(bytes("MIGRATOR_LOCKED"));
+        registry.setMigrator(address(evil));
+    }
+
+    function test_MigratorRejectsZero() public {
+        vm.expectRevert(bytes("ZERO_MIGRATOR"));
+        registry.setMigrator(address(0));
     }
 
     function test_MigrateMovesReserveAndTokens_PermissionlessCrank() public {
@@ -209,7 +255,7 @@ contract UniV3MigratorTest is Base {
         vm.prank(bob);
         m.buy{value: 11 ether}(0);
         address pool = m.migrate();
-        assertEq(pool, address(0xCAFE));
+        assertEq(pool, pm.pool());
 
         // full-range ticks snapped to spacing 200, LP minted straight to dead
         assertEq(pm.lastTickLower(), -887200);
@@ -229,5 +275,26 @@ contract UniV3MigratorTest is Base {
         migrator.migrate{value: 1 ether}(address(m), 1);
     }
 
+    /// HIGH-1 regression: a pool pre-created at a skewed price must NOT be minted into.
+    function test_RevertsOnPreCreatedSkewedPool() public {
+        // Attacker initializes the pool at a far-off price before migration; the real
+        // v3 createAndInitializePoolIfNecessary would then be a no-op and ignore our price.
+        pm.poolContract().initialize(uint160(1));
 
+        vm.prank(bob);
+        m.buy{value: 11 ether}(0);
+        uint256 reserve = m.realEthReserve();
+
+        vm.expectRevert(bytes("POOL_PRICE_MANIPULATED"));
+        m.migrate();
+
+        // Atomic: nothing moved. The market can still migrate later, once the pool is
+        // arbitraged back to fair value — funds are never stranded or stolen.
+        assertEq(m.realEthReserve(), reserve);
+        assertFalse(m.migrated());
+        // and the curve exit still works in the meantime
+        uint256 bal = m.balanceOf(bob);
+        vm.prank(bob);
+        m.sell(bal / 2, 0);
+    }
 }

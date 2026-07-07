@@ -23,6 +23,10 @@ function applySlippage(quote: bigint, bps: number): bigint {
   return (quote * BigInt(10_000 - bps)) / 10_000n;
 }
 
+// Leave a little ETH for gas so "buy with everything" fails in-UI with words
+// rather than at wallet gas estimation with a raw RPC error (generous for an L2).
+const GAS_HEADROOM = parseEther("0.00001");
+
 /**
  * Buy/Sell box — the centerpiece of the coin page. Lives *inside* a WhitelistGate
  * (rendered by the parent) so it only appears for wallets cleared to trade. After
@@ -171,10 +175,13 @@ function BuyPanel({
   const invalid = input.trim() !== "" && ethWei === null;
 
   // Show the wallet's ETH and refuse over-balance amounts here, with words —
-  // not later at gas estimation with a raw RPC error.
+  // not later at gas estimation with a raw RPC error. Leave gas headroom so a
+  // "buy with everything" doesn't pass the UI only to die at gas estimation.
   const { address } = useAccount();
   const { data: ethBal } = useBalance({ address, query: { refetchInterval: 15_000 } });
-  const overBalance = ethWei !== null && ethBal !== undefined && ethWei > ethBal.value;
+  const spendable =
+    ethBal !== undefined ? (ethBal.value > GAS_HEADROOM ? ethBal.value - GAS_HEADROOM : 0n) : undefined;
+  const overBalance = ethWei !== null && spendable !== undefined && ethWei > spendable;
 
   const {
     data: quote,
@@ -197,7 +204,9 @@ function BuyPanel({
   }, [isSuccess]);
 
   const busy = isPending || confirming || syncing;
-  const canSubmit = ethWei !== null && !overBalance && minOut !== undefined && !busy;
+  // Require a POSITIVE min-out: a 0 quote (buys frozen post-graduation, or a dust
+  // amount) must never submit an unprotected trade.
+  const canSubmit = ethWei !== null && !overBalance && minOut !== undefined && minOut > 0n && !busy;
 
   return (
     <div className="space-y-3">
@@ -349,8 +358,11 @@ function SellPanel({
   }, [isSuccess]);
 
   const busy = isPending || confirming || syncing;
+  // Require a POSITIVE min-out. On a graduated-but-not-migrated market sells stay
+  // live, but a stale/0 quote must never send sell(amount, 0) — that would ship
+  // with no slippage floor and hand a sandwicher the seller's proceeds.
   const canSubmit =
-    tokenWei !== null && !overBalance && minOut !== undefined && bal > 0n && !busy;
+    tokenWei !== null && !overBalance && minOut !== undefined && minOut > 0n && bal > 0n && !busy;
 
   return (
     <div className="space-y-3">

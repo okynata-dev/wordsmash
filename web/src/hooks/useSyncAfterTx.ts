@@ -15,14 +15,19 @@ export function useSyncAfterTx() {
       const attempts = opts?.attempts ?? 4;
       const intervalMs = opts?.intervalMs ?? 1500;
       setSyncing(true);
-      // Immediate invalidation.
-      await Promise.all(keys.map((key) => qc.invalidateQueries({ queryKey: key })));
-      // A few delayed refetches to ride out indexer lag.
-      for (let i = 0; i < attempts; i++) {
-        await new Promise((r) => setTimeout(r, intervalMs));
-        await Promise.all(keys.map((key) => qc.refetchQueries({ queryKey: key })));
+      try {
+        // Immediate invalidation.
+        await Promise.all(keys.map((key) => qc.invalidateQueries({ queryKey: key })));
+        // A few delayed refetches to ride out indexer lag.
+        for (let i = 0; i < attempts; i++) {
+          await new Promise((r) => setTimeout(r, intervalMs));
+          await Promise.all(keys.map((key) => qc.refetchQueries({ queryKey: key })));
+        }
+      } finally {
+        // Always clear the flag — a rejected invalidate/refetch must never leave the
+        // trade/claim buttons spinner-locked after an otherwise-successful tx.
+        setSyncing(false);
       }
-      setSyncing(false);
     },
     [qc],
   );

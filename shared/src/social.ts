@@ -59,10 +59,26 @@ export function validateUsername(u: string | null): string | null {
   return USERNAME_RE.test(u) ? null : "username must be 3–20 chars of a–z, 0–9, _";
 }
 
+/**
+ * Strip HTML so stored user text carries no active markup. The in-repo web client
+ * renders these as React text nodes (auto-escaped) so it's safe there regardless,
+ * but ANY other consumer of this public API (an HTML email digest, a native webview
+ * using innerHTML) would be XSS-exposed if we stored live markup. Remove tags, then
+ * drop any residual angle brackets so nothing can reconstruct a tag downstream.
+ */
+export function stripHtml(input: string): string {
+  return input.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
+}
+
 export function sanitizeBio(input: string | null | undefined): string | null {
   if (input == null) return null;
-  const b = input.replace(/\s+/g, " ").trim().slice(0, BIO_MAX);
+  const b = stripHtml(input).replace(/\s+/g, " ").trim().slice(0, BIO_MAX);
   return b === "" ? null : b;
+}
+
+/** Storage sanitizer for a comment body — strips markup, preserves the text. */
+export function sanitizeComment(input: string): string {
+  return stripHtml(input);
 }
 
 export function normalizeTwitter(input: string | null | undefined): string | null {
@@ -87,6 +103,15 @@ export function normalizeWebsite(input: string | null | undefined): string | nul
 }
 
 // ── canonical signed messages (identical on client + server) ──────────────────
+// NOTE (hardening follow-up): these messages bind the action, address, fields and
+// issue-time, but not a chainId. That means the same wallet's signature is byte-
+// identical across our own deployments (testnet ↔ mainnet), so within the 10-min TTL
+// it could be replayed on the other deployment. Impact is benign today (every action
+// is a same-signer, non-financial write, and mainnet isn't live), so we intentionally
+// defer chainId binding to the mainnet-config work — where the chain id becomes known
+// and can be threaded through both the client (activeChain.id) and the indexer env —
+// rather than risk the live auth paths now. Per-action prefixes already prevent
+// cross-ACTION reuse, and the human-readable text is shown in the wallet.
 export function profileUpdateMessage(address: string, p: ProfileEditable, timestamp: number): string {
   return [
     "keepney: update profile",

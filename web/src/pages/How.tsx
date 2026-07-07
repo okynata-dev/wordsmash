@@ -20,8 +20,9 @@ export function How() {
     <div className="mx-auto max-w-[720px]">
       <h1 className="font-display text-3xl font-semibold tracking-tight">How it works</h1>
       <p className="mt-3 text-[15px] leading-relaxed text-muted">
-        Every word can be kept exactly once. Keeping it gives you two things: the deed
-        and the market.
+        Keep a word and it instantly gets its own live market. Because you own the word,
+        you earn a cut of every trade in it — for as long as you hold it. That&rsquo;s the
+        whole loop.
       </p>
 
       <section className="mt-10 space-y-6">

@@ -13,6 +13,7 @@ import {
   normalizeUsername,
   validateUsername,
   sanitizeBio,
+  sanitizeComment,
   normalizeTwitter,
   normalizeWebsite,
   profileUpdateMessage,
@@ -121,15 +122,15 @@ export async function enforceFreshness(
   if (BigInt(`0x${sig.slice(66, 130)}`) > SECP256K1_HALF_N) {
     throw new AuthError("non-canonical signature");
   }
-  const seen = await db
-    .prepare("SELECT 1 AS x FROM consumed_sigs WHERE sig = ?")
-    .bind(sig)
-    .first<{ x: number }>();
-  if (seen) throw new AuthError("replayed request");
-  await db
+  // Atomic insert-and-check: rely on the PK's INSERT OR IGNORE rowcount rather than a
+  // prior SELECT. A SELECT-then-INSERT let two concurrent requests with the same sig
+  // both read "not seen" and proceed; here exactly one insert changes a row, the rest
+  // get 0 changes and are rejected — closing the double-action window.
+  const res = await db
     .prepare("INSERT OR IGNORE INTO consumed_sigs (sig, ts) VALUES (?, ?)")
     .bind(sig, timestamp)
     .run();
+  if (!res.meta?.changes) throw new AuthError("replayed request");
   // prune signatures older than the TTL (they can never validate again)
   await db.prepare("DELETE FROM consumed_sigs WHERE ts < ?").bind(Date.now() - SIG_TTL_MS).run();
 }
@@ -632,12 +633,15 @@ export async function postComment(
     .first<{ token_id: string }>();
   const tokenId = wordRow?.token_id ?? null;
   const ts = Date.now();
+  // Verify against the raw signed text (above), but STORE markup-stripped so any
+  // non-React consumer of the public API can't be XSS'd by a stored comment.
+  const stored = sanitizeComment(text);
 
   const ins = await db
     .prepare(
       "INSERT INTO comments (token_id, word, author, body, ts, parent_id) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .bind(tokenId, word, address, text, ts, parentId)
+    .bind(tokenId, word, address, stored, ts, parentId)
     .run();
 
   // Read back the row (with authorMeta) for the newest comment by this author.
@@ -661,7 +665,7 @@ export async function postComment(
     tokenId: tokenId ?? "",
     word,
     author: checksum(address),
-    body: text,
+    body: stored,
     ts,
     parentId,
     likes: 0,

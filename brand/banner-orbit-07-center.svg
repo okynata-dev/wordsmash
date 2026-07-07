@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1500 500">
+<rect width="1500" height="500" fill="#ffffff"/>
+  <defs><radialGradient id="g7" cx="0.35" cy="0.3" r="1"><stop offset="0" stop-color="#8fb0ff"/><stop offset="0.6" stop-color="#1230ff"/><stop offset="1" stop-color="#0000d0"/></radialGradient></defs>
+  <circle cx="490" cy="240" r="70" fill="url(#g7)"/>
+  <circle cx="490" cy="240" r="112" fill="none" stroke="#5b8cff" stroke-width="12"/>
+  <circle cx="576" cy="168" r="17" fill="#0000ff"/>
+  <text x="650" y="288" font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="132" letter-spacing="-3" fill="#14161f">keepney</text>
+  <text x="750" y="408" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="36" fill="#6b7080">Keep a word. Earn on every trade.</text>
+</svg>

@@ -16,6 +16,16 @@
       "port": 5174
     },
     {
+      "name": "web-build-preview",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "node node_modules/typescript/lib/tsc.js -b && node node_modules/vite/bin/vite.js build && node node_modules/vite/bin/vite.js preview --port 4173 --strictPort --host 127.0.0.1"
+      ],
+      "cwd": "web",
+      "port": 4173
+    },
+    {
       "name": "web-prod",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview", "--", "--port", "4173", "--strictPort", "--host", "127.0.0.1"],

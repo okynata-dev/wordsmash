@@ -20,7 +20,7 @@ export const anvil = defineChain({
 // The chain this build targets (one active chain at a time, chosen by env flag).
 export const activeChain = USE_ANVIL ? anvil : baseSepolia;
 
-const chains = (USE_ANVIL ? [anvil] : [baseSepolia]) as const;
+const chains = USE_ANVIL ? ([anvil] as const) : ([baseSepolia] as const);
 const transports = {
   [anvil.id]: http(ANVIL_RPC),
   [baseSepolia.id]: http(BASE_SEPOLIA_RPC),

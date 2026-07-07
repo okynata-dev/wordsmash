@@ -50,7 +50,7 @@ export function ActivityFeed({
   compact?: boolean;
   live?: boolean;
   /** Client-side type filter (e.g. ["buy","sell"]); omit for everything. */
-  types?: string[];
+  types?: readonly string[];
 }) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["activity"],

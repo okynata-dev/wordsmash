@@ -100,6 +100,10 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
   const { data: whitelistEnabled } = useWhitelistEnabled();
   const { data: sellerWhitelisted } = useIsWhitelisted(listing.seller as `0x${string}`);
   const sellerBlocked = whitelistEnabled === true && sellerWhitelisted === false;
+  // Don't let a buy fire before the seller's whitelist status is known: the deed
+  // transfer is gated in the registry, so a de-whitelisted seller would revert
+  // (NOT_WHITELISTED) and waste gas. Mirror the word page's guard.
+  const loadingSeller = whitelistEnabled === undefined || sellerWhitelisted === undefined;
 
   useEffect(() => {
     if (isSuccess) {
@@ -125,8 +129,9 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
     <Card className="flex flex-wrap items-center justify-between gap-3 p-4 transition hover:border-fg/20">
       <Link to={`/word/${encodeURIComponent(listing.word)}`} className="min-w-0">
         <div className="word-display truncate text-2xl">{listing.word}</div>
-        <div className="mt-1 text-xs text-muted">
-          by <UserBadge address={listing.seller} size={18} link={false} />
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+          <span>by</span>
+          <UserBadge address={listing.seller} size={18} link={false} />
         </div>
       </Link>
       <div className="flex flex-col items-end gap-1">
@@ -145,6 +150,7 @@ function ListingCard({ listing, onDone }: { listing: ListingRow; onDone: () => v
                 checking ||
                 isSuccess ||
                 sellerBlocked ||
+                loadingSeller ||
                 priceBad ||
                 tokenId === null
               }

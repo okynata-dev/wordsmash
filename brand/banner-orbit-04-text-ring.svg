@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1500 500">
+<rect width="1500" height="500" fill="#ffffff"/>
+  <defs><radialGradient id="g4" cx="0.35" cy="0.3" r="1"><stop offset="0" stop-color="#8fb0ff"/><stop offset="0.6" stop-color="#1230ff"/><stop offset="1" stop-color="#0000d0"/></radialGradient></defs>
+  <circle cx="1500" cy="250" r="340" fill="url(#g4)"/>
+  <circle cx="1500" cy="250" r="450" fill="none" stroke="#5b8cff" stroke-width="12"/>
+  <circle cx="1077" cy="404" r="32" fill="#0000ff"/>
+  <g font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="72" fill="#0000ff" text-anchor="middle"><text transform="translate(969 429) rotate(251.4)">K</text><text transform="translate(953 370) rotate(257.6)">E</text><text transform="translate(943 310) rotate(263.8)">E</text><text transform="translate(940 250) rotate(270.0)">P</text><text transform="translate(943 190) rotate(276.2)">N</text><text transform="translate(953 130) rotate(282.4)">E</text><text transform="translate(969 71) rotate(288.6)">Y</text></g>
+</svg>

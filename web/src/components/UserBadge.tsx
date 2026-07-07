@@ -27,9 +27,9 @@ export function UserBadge({
   const label = meta?.username ? `@${meta.username}` : shortAddr(address);
 
   const inner = (
-    <span className={`inline-flex min-w-0 items-center gap-2 ${className}`}>
+    <span className={`inline-flex min-w-0 items-center gap-1.5 align-middle ${className}`}>
       {showAvatar && <Avatar address={address} size={size} />}
-      <span className={`truncate ${textClassName}`}>{label}</span>
+      <span className={`truncate leading-none ${textClassName}`}>{label}</span>
     </span>
   );
 

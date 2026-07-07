@@ -19,7 +19,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Privy modal theming — matches the app theme at load, volt-blue accent, book logo.
+// Privy modal theming — matches the app theme at load, volt-blue accent, orbit logo.
 const privyConfig: PrivyClientConfig = {
   appearance: {
     theme: storedTheme(),

@@ -39,12 +39,13 @@ export function Card({
   );
 }
 
+/** Brand loader: the orbit mark in motion — a faint ring with the word-satellite circling it. */
 export function Spinner({ className = "" }: { className?: string }) {
   return (
-    <span
-      className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
-      aria-hidden
-    />
+    <span className={`relative inline-block h-4 w-4 animate-spin ${className}`} aria-hidden>
+      <span className="absolute inset-[2px] rounded-full border border-current opacity-40" />
+      <span className="absolute left-1/2 top-0 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-current" />
+    </span>
   );
 }
 
