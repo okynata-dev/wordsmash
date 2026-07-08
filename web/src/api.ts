@@ -152,20 +152,6 @@ export const api = {
   notifications: (address: string) =>
     getList<NotificationRow>(`/notifications/${normAddr(address)}`),
 
-  /** GET /collections -> curated collections with claimed/total counts. */
-  collections: () =>
-    getList<{
-      key: string;
-      title: string;
-      emoji: string;
-      blurb: string;
-      total: number;
-      claimed: number;
-    }>(`/collections`),
-
-  /** GET /collection/:key -> claimed words in a collection (market-enriched). */
-  collection: (key: string) => getList<WordRow>(`/collection/${encodeURIComponent(key)}`),
-
   /** GET /referrals/:address -> your referral dashboard. */
   referrals: (address: string) =>
     get<{

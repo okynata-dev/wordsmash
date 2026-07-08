@@ -4,7 +4,6 @@ import { createPublicClient, getAddress, http } from "viem";
 import { wordMarketAbi } from "../../shared/src/abis.js";
 import type { Db } from "./db.js";
 import { normalizeWord } from "../../shared/src/normalize.js";
-import { COLLECTIONS, collectionByKey } from "../../shared/src/collections.js";
 import type {
   WordRow,
   ListingRow,
@@ -248,64 +247,6 @@ export async function getWords(
     })),
     cursor: hasMore ? String(offset + PAGE_SIZE) : null,
   };
-}
-
-// GET /collections -> each curated collection with claimed/total counts.
-// GET /collection/:key -> the CLAIMED words in that collection as market-enriched rows.
-export async function getCollections(db: Db): Promise<
-  Array<{ key: string; title: string; emoji: string; blurb: string; total: number; claimed: number }>
-> {
-  const out = [];
-  for (const c of COLLECTIONS) {
-    if (c.words.length === 0) {
-      out.push({ ...meta(c), total: 0, claimed: 0 });
-      continue;
-    }
-    const ph = c.words.map(() => "?").join(",");
-    const row = await db
-      .prepare(`SELECT COUNT(*) AS n FROM words WHERE word IN (${ph})`)
-      .bind(...c.words)
-      .first<{ n: number }>();
-    out.push({ ...meta(c), total: c.words.length, claimed: Number(row?.n ?? 0) });
-  }
-  return out;
-
-  function meta(c: (typeof COLLECTIONS)[number]) {
-    return { key: c.key, title: c.title, emoji: c.emoji, blurb: c.blurb };
-  }
-}
-
-export async function getCollection(db: Db, key: string): Promise<WordRow[]> {
-  const c = collectionByKey(key);
-  if (!c || c.words.length === 0) return [];
-  const ph = c.words.map(() => "?").join(",");
-  const { results } = await db
-    .prepare(
-      `SELECT w.token_id AS token_id, w.word AS word, w.owner AS owner, w.claimed_at AS claimed_at, w.tx AS tx,
-              m.last_price_wei AS price_wei, m.volume_wei AS m_volume, m.real_eth_reserve AS reserve, m.graduated AS m_grad
-       FROM words w LEFT JOIN markets m ON m.market = w.market
-       WHERE w.word IN (${ph})
-       ORDER BY LENGTH(COALESCE(m.volume_wei,'0')) DESC, COALESCE(m.volume_wei,'0') DESC, w.claimed_at DESC`,
-    )
-    .bind(...c.words)
-    .all<{
-      token_id: string;
-      word: string | null;
-      owner: string;
-      claimed_at: number;
-      tx: string;
-      price_wei: string | null;
-      m_volume: string | null;
-      reserve: string | null;
-      m_grad: number | null;
-    }>();
-  return results.map((r) => ({
-    ...toWordRow(r),
-    priceWei: r.price_wei ?? undefined,
-    tradeVolumeWei: r.m_volume ?? undefined,
-    graduated: r.m_grad != null ? !!r.m_grad : undefined,
-    graduationProgressBps: r.reserve != null ? progressBps(r.reserve, GRAD_THRESHOLD_WEI) : undefined,
-  }));
 }
 
 // GET /word/:word  (path param normalized first)

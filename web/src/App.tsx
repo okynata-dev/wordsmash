@@ -7,7 +7,6 @@ import { Market } from "./pages/Market";
 import { Top } from "./pages/Top";
 import { Activity } from "./pages/Activity";
 import { Stats } from "./pages/Stats";
-import { Collections } from "./pages/Collections";
 import { Watchlist } from "./pages/Watchlist";
 import { Legal } from "./pages/Legal";
 import { How } from "./pages/How";
@@ -42,8 +41,6 @@ export function App() {
             <Route path="top" element={<Top />} />
             <Route path="activity" element={<Activity />} />
             <Route path="stats" element={<Stats />} />
-            <Route path="collections" element={<Collections />} />
-            <Route path="collections/:key" element={<Collections />} />
             <Route path="watchlist" element={<Watchlist />} />
             <Route path="how" element={<How />} />
             <Route path="legal" element={<Legal />} />

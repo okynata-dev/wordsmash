@@ -12,8 +12,6 @@ import {
   getProfilePositions,
   getAnalytics,
   getNotifications,
-  getCollections,
-  getCollection,
   getCheck,
   getStats,
   getMarket,
@@ -371,19 +369,6 @@ export default {
         const address = requireAddress(decodeURIComponent(parts[1]));
         return json(await getNotifications(db, address), {
           headers: { "Cache-Control": "public, max-age=10" },
-        });
-      }
-
-      // /collections — curated collections with claimed/total counts
-      if (path === "/collections") {
-        return json(await getCollections(db), {
-          headers: { "Cache-Control": "public, max-age=30" },
-        });
-      }
-      // /collection/:key — claimed words in a collection (market-enriched)
-      if (parts[0] === "collection" && parts[1] != null) {
-        return json(await getCollection(db, decodeURIComponent(parts[1])), {
-          headers: { "Cache-Control": "public, max-age=30" },
         });
       }
 
