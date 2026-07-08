@@ -87,6 +87,7 @@ contract UniV3Migrator is ReentrancyGuard {
         dustReceiver = dustReceiver_;
         feeTier = feeTier_;
         // Full range, snapped to the tick spacing (MIN/MAX tick is ±887272).
+        // slither-disable-next-line divide-before-multiply -- intentional floor-to-spacing rounding
         int24 maxTick = (887272 / tickSpacing_) * tickSpacing_;
         tickLower = -maxTick;
         tickUpper = maxTick;
@@ -114,10 +115,13 @@ contract UniV3Migrator is ReentrancyGuard {
         pool = positionManager.createAndInitializePoolIfNecessary(token0, token1, feeTier, sqrtPriceX96);
         _requireFairPrice(pool, sqrtPriceX96);
 
-        IERC20(token0).approve(address(positionManager), amount0);
-        IERC20(token1).approve(address(positionManager), amount1);
+        // Both tokens are known-good (the word token is our own OZ ERC20; the other is WETH9),
+        // so a bool return is guaranteed — still checked to satisfy the letter of ERC-20.
+        require(IERC20(token0).approve(address(positionManager), amount0), "APPROVE_FAIL");
+        require(IERC20(token1).approve(address(positionManager), amount1), "APPROVE_FAIL");
 
         // LP NFT minted DIRECTLY to the dead address — locked forever, no custody moment.
+        // slither-disable-next-line unused-return -- liquidity amount deliberately unused
         (uint256 lpTokenId,, uint256 used0, uint256 used1) = positionManager.mint(
             INonfungiblePositionManager.MintParams({
                 token0: token0,
@@ -152,6 +156,7 @@ contract UniV3Migrator is ReentrancyGuard {
     ///      revert. Migration is not lost: it re-cranks once the pool is arbitraged back to
     ///      fair value (the curve keeps working until then).
     function _requireFairPrice(address pool, uint160 expected) private view {
+        // slither-disable-next-line unused-return -- only sqrtPriceX96 is relevant here
         (uint160 live,,,,,,) = IUniswapV3PoolMinimal(pool).slot0();
         uint256 lo = (uint256(expected) * 975) / 1000; // −2.5% on sqrtPrice (~−5% price)
         uint256 hi = (uint256(expected) * 1025) / 1000; // +2.5% on sqrtPrice (~+5% price)
